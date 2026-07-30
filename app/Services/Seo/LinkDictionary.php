@@ -29,8 +29,30 @@ class LinkDictionary
 
     public const MAX_SHARED = 3;
 
-    /** Words stripped from SEO titles before phrase extraction. */
-    protected const TITLE_NOISE = ['buy', 'shop', 'online', 'price', 'best', 'cheap', 'order', 'uae', 'dubai'];
+    /**
+     * Generic, niche-neutral words stripped from SEO titles before phrase
+     * extraction. Deliberately excludes geo terms (a travel blog links
+     * "Dubai") and ambiguous words like "best" (legit in "best practices").
+     * Override per site via the `seo.link_title_noise` setting (comma- or
+     * newline-separated) — see titleNoise().
+     */
+    protected const TITLE_NOISE = ['buy', 'shop', 'online', 'order', 'sale', 'discount'];
+
+    /** Effective title-noise list: admin override if set, else the generic default. */
+    protected function titleNoise(): array
+    {
+        $custom = setting('seo.link_title_noise');
+
+        if (is_string($custom) && trim($custom) !== '') {
+            $words = array_filter(array_map('trim', preg_split('/[,\n]+/', mb_strtolower($custom))));
+
+            if ($words !== []) {
+                return array_values($words);
+            }
+        }
+
+        return self::TITLE_NOISE;
+    }
 
     /** @return array{targets: int, phrases: int} */
     public function rebuild(): array
@@ -188,7 +210,7 @@ class LinkDictionary
 
         if (filled($seoTitle)) {
             $cleaned = trim(preg_replace(
-                '/\b('.implode('|', self::TITLE_NOISE).')\b/iu',
+                '/\b('.implode('|', array_map(fn ($w) => preg_quote($w, '/'), $this->titleNoise())).')\b/iu',
                 ' ',
                 preg_split('/[|–—]/u', $seoTitle)[0],
             ));
@@ -268,31 +290,56 @@ class LinkDictionary
         return $out;
     }
 
-    /** All subsets of size 2..$max (n is small — titles are short). */
+    /**
+     * All token combinations of size 2..$max. Generates exactly C(n,k) for
+     * each k directly, instead of enumerating all 2^n bitmasks and discarding
+     * the wrong sizes — the old approach blew up on long H2/H3 headings
+     * (n≈15+ → tens of thousands of masks) on every rebuild. Long headings are
+     * capped at the first 16 meaningful tokens for set generation (ordered
+     * n-grams still cover the full heading), so worst case stays bounded.
+     */
     protected function subsets(array $tokens, int $max): array
     {
+        $tokens = array_values($tokens);
+
+        if (count($tokens) > 16) {
+            $tokens = array_slice($tokens, 0, 16);
+        }
+
         $n = count($tokens);
+        $upper = min($max, $n);
         $out = [];
 
-        for ($mask = 1; $mask < (1 << $n); $mask++) {
-            $bits = substr_count(decbin($mask), '1');
-
-            if ($bits < 2 || $bits > $max) {
-                continue;
-            }
-
-            $subset = [];
-
-            for ($i = 0; $i < $n; $i++) {
-                if ($mask & (1 << $i)) {
-                    $subset[] = $tokens[$i];
-                }
-            }
-
-            $out[] = $subset;
+        for ($k = 2; $k <= $upper; $k++) {
+            $this->combine($tokens, $k, 0, [], $out);
         }
 
         return $out;
+    }
+
+    /**
+     * Append every size-$k combination of $tokens (indices ascending) to $out.
+     *
+     * @param  array<int, string>  $current
+     * @param  array<int, array<int, string>>  $out
+     */
+    protected function combine(array $tokens, int $k, int $start, array $current, array &$out): void
+    {
+        if (count($current) === $k) {
+            $out[] = $current;
+
+            return;
+        }
+
+        $n = count($tokens);
+        $need = $k - count($current);
+
+        // Stop early once too few tokens remain to complete a size-$k set.
+        for ($i = $start; $i <= $n - $need; $i++) {
+            $next = $current;
+            $next[] = $tokens[$i];
+            $this->combine($tokens, $k, $i + 1, $next, $out);
+        }
     }
 
     /** @return array<int, string> lowercase alphanumeric tokens */

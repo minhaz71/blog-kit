@@ -67,7 +67,7 @@ class BackupSystemTest extends TestCase
         $this->assertIsArray($manifest);
         $this->assertSame(BackupManifest::FORMAT, $manifest['format']);
         $this->assertSame(PHP_VERSION, $manifest['php']['version']);
-        $this->assertSame(config('shopkit.version'), $manifest['app']['shopkit_version']);
+        $this->assertSame(config('blogkit.version'), $manifest['app']['blogkit_version']);
         $this->assertSame(config('database.default'), $manifest['database']['driver']);
         $this->assertNotEmpty($manifest['database']['migrations']);
         $this->assertArrayHasKey('products', $manifest['counts']);
@@ -98,12 +98,12 @@ class BackupSystemTest extends TestCase
     public function test_newer_shopkit_backup_is_blocked(): void
     {
         $manifest = $this->compatibleManifest();
-        $manifest['app']['shopkit_version'] = '99.0.0';
+        $manifest['app']['blogkit_version'] = '99.0.0';
 
         $check = BackupCompatibility::check($this->makeArchive($manifest));
 
         $this->assertFalse($check->ok);
-        $this->assertStringContainsString('ShopKit 99.0.0', implode(' ', $check->errors));
+        $this->assertStringContainsString('Hemdox Blog Kit 99.0.0', implode(' ', $check->errors));
     }
 
     public function test_unknown_migrations_block_the_restore(): void

@@ -4,44 +4,63 @@ namespace App\Services\Ai;
 
 /**
  * Sample article-brief CSV for the AI Blog Writer — one article per row.
+ * Topic-agnostic: the writer handles ANY subject, so this sample spans a few
+ * unrelated niches to show the columns, not a single industry.
  *
- * Demonstrates every recognized column, including scheduling:
- *  - publish_date only  → published at 00:00 that day;
- *  - publish_date + publish_time → published at that exact time;
- *  - both empty → publishes per the batch settings (immediately, or
- *    staggered by the batch's "delay between articles").
- * Extra columns are passed to the AI verbatim as research context.
+ * Recognized columns (all optional except title; unknown columns are passed
+ * to the writer verbatim as extra research context):
+ *  - title         the working headline (the writer may refine it)
+ *  - keywords      comma-separated; the FIRST is the primary keyword
+ *  - search_intent informational / comparison / how-to / etc.
+ *  - entities      real names/tools/standards to reference for topical depth
+ *  - audience      who the article is for
+ *  - angle         the unique take / what makes it better than the SERP
+ *  - outline       optional section hints (the writer expands them)
+ *  - tone          e.g. friendly-expert, formal, conversational
+ *  - target_words  explicit length target (overrides the role default)
+ *  - details       any facts the writer must stay grounded in
+ *  - scheduling: publish_date only → 00:00 that day; + publish_time → exact
+ *    minute; both empty → batch settings decide.
  */
 class BlogSampleCsv
 {
-    public const FILENAME = 'sample-blog-articles-terea.csv';
+    public const FILENAME = 'sample-blog-articles.csv';
 
     public static function content(): string
     {
         $rows = [
-            ['title', 'keywords', 'country', 'city', 'details', 'angle', 'publish_date', 'publish_time'],
+            ['title', 'keywords', 'search_intent', 'entities', 'audience', 'angle', 'tone', 'target_words', 'details', 'publish_date', 'publish_time'],
             [
-                'How to Spot Genuine TEREA Cartons Before You Pay',
-                'genuine terea uae, fake terea sticks, terea authenticity check',
-                'United Arab Emirates', 'Dubai',
-                'We sell full cartons only: 1 carton = 10 packs = 200 sticks. Buyers check the seal and date code on arrival before paying (cash or card on delivery).',
-                'Practical at-the-door checklist an experienced buyer uses, not generic anti-fake advice.',
+                'How to Start Composting in a Small Apartment',
+                'apartment composting, indoor composting for beginners, bokashi vs worm bin',
+                'how-to',
+                'Bokashi, vermicomposting, red wigglers, carbon-to-nitrogen ratio',
+                'City renters with no garden and limited space',
+                'A realistic, smell-free method that actually works in a studio, with the mistakes most guides skip.',
+                'friendly-expert', '1400',
+                'Cover bokashi vs worm bin trade-offs, what not to add, and what to do with the finished compost with no garden.',
                 '2026-08-01', '',
             ],
             [
-                'TEREA Japan vs UAE Edition: What Actually Differs',
-                'terea japan vs uae, japan edition terea difference',
-                'United Arab Emirates', 'Dubai',
-                'Japan editions are exclusive flavors imported by the carton (10 packs, 200 sticks); UAE editions are the officially sold local range. Both genuine, both ILUMA-only.',
-                'Honest comparison that helps a buyer decide which edition suits them, with flavor mapping.',
-                '2026-08-03', '14:30',
+                'Index Funds vs ETFs: Which Should a First-Time Investor Pick?',
+                'index funds vs etfs, etf vs index fund beginner',
+                'comparison',
+                'expense ratio, S&P 500, mutual fund, brokerage account, dollar-cost averaging',
+                'First-time investors deciding where to start',
+                'A plain-English decision guide with a clear "who should pick which", not a jargon dump.',
+                'clear, neutral, non-promotional', '1600',
+                'YMYL topic: explain concepts, do not give personalized advice; tell readers to consider a licensed advisor.',
+                '2026-08-03', '09:30',
             ],
             [
-                'Why Buying TEREA by the Carton Costs Less Per Stick',
-                'terea carton price uae, terea bulk price per stick',
-                'United Arab Emirates', 'Sharjah',
-                'Cartons hold 10 packs (200 sticks). Break down price per stick vs street single-pack sellers; mention 1-hour delivery in Dubai, Sharjah, Ajman and free delivery over 300 AED.',
-                'Do the math for the reader with a simple table; no hype, just numbers.',
+                'Is the Wall Press-Up Enough to Build Upper-Body Strength?',
+                'wall push up benefits, wall press up for beginners',
+                'informational',
+                'progressive overload, incline push-up, scapular protraction',
+                'Absolute beginners and people returning to exercise',
+                'Honest about when it helps and when to progress, with a simple 4-week progression.',
+                'encouraging, expert', '1100',
+                'YMYL-adjacent: general fitness info only, advise consulting a professional for injuries.',
                 '', '',
             ],
         ];

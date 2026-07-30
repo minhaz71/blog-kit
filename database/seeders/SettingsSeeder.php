@@ -33,10 +33,12 @@ class SettingsSeeder extends Seeder
             'seo.social_youtube' => null,
             'seo.robots_txt' => null,
 
-            // Optional modules. Ecommerce ships OFF — Hemdox Blog Kit is a
-            // blog-first CMS; an admin can enable the full store from
-            // Admin → System → Modules. See config/blogkit.php + module_enabled().
-            'modules.ecommerce_enabled' => false,
+            // NOTE: the ecommerce module default is intentionally NOT seeded
+            // here. module_enabled('ecommerce') falls back to
+            // config/blogkit.php → BLOGKIT_ECOMMERCE_ENABLED (OFF for a blog),
+            // and an admin's save in Admin → System → Modules writes the
+            // setting only when they explicitly toggle it. Seeding a row would
+            // pin the value and shadow the config/env default.
 
             'security.firewall_enabled' => true,
             'security.max_login_attempts' => 5,

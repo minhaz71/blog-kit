@@ -49,6 +49,12 @@ class ReviewCycle
         }
 
         for ($i = 1; $i <= $passes; $i++) {
+            // Fix mechanically-fixable issues (em/en dashes, meta-length
+            // overruns) BEFORE linting so they never become an "issue" that
+            // triggers a full-article LLM rewrite. This is the single biggest
+            // avoidable token cost in the loop — a regex handles them for free.
+            $output = ContentReviewer::stripEmDashes(ContentReviewer::clampMetaLengths($output));
+
             $lint = ContentReviewer::lint($output, $allowedUrls, $selfUrl, $keywords, (string) ($item->row['name'] ?? ''));
 
             if ($combined) {
@@ -134,29 +140,38 @@ class ReviewCycle
         // rule (meta lengths, banned phrases, link rules, FAQs, no <h1>)
         // is publish-ready; residual critic notes are recorded, not blocking.
         if (! $approved) {
-            if ($issues !== []) {
-                try {
-                    $output = $this->writer->rewrite($item, $output, $issues);
-                } catch (\Throwable $e) {
-                    AiActivityLog::write($batch->id, $item->id, 'write',
-                        'Final rewrite failed ('.mb_substr($e->getMessage(), 0, 160).') — gating the current draft as-is.', 'warning');
-                }
-            }
-
-            // Auto-fix what a machine can fix (meta length overruns) before
-            // judging — a 3-char overrun must not hold a product.
-            $output = ContentReviewer::clampMetaLengths($output);
-
+            // Lint FIRST (after cleaning mechanically-fixable issues). The
+            // deterministic lint is the publish authority; the LLM critic's
+            // residual $issues are usually style-level "consider…" notes.
+            // Only spend a final full-article rewrite when a HARD rule still
+            // fails — never for the critic's stylistic preferences.
+            $output = ContentReviewer::stripEmDashes(ContentReviewer::clampMetaLengths($output));
             $finalLint = ContentReviewer::lint($output, $allowedUrls, $selfUrl, $keywords, (string) ($item->row['name'] ?? ''));
 
             if ($finalLint === []) {
                 $approved = true;
                 AiActivityLog::write($batch->id, $item->id, 'review',
-                    "✅ Deterministic quality gate passed after {$done} review pass(es) + final fixes — publishing. Reviewer's remaining notes were style-level.", 'success');
+                    "✅ Deterministic quality gate passed after {$done} review pass(es) — publishing. Reviewer's remaining notes were style-level.", 'success');
             } else {
-                $issues = $finalLint;
-                AiActivityLog::write($batch->id, $item->id, 'review',
-                    'Hard rules still failing after final rewrite: '.implode('; ', array_slice($finalLint, 0, 5)), 'warning');
+                // One convergence rewrite, targeted at the hard lint issues only.
+                try {
+                    $output = $this->writer->rewrite($item, $output, $finalLint);
+                    $output = ContentReviewer::stripEmDashes(ContentReviewer::clampMetaLengths($output));
+                    $finalLint = ContentReviewer::lint($output, $allowedUrls, $selfUrl, $keywords, (string) ($item->row['name'] ?? ''));
+                } catch (\Throwable $e) {
+                    AiActivityLog::write($batch->id, $item->id, 'write',
+                        'Final rewrite failed ('.mb_substr($e->getMessage(), 0, 160).') — gating the current draft as-is.', 'warning');
+                }
+
+                if ($finalLint === []) {
+                    $approved = true;
+                    AiActivityLog::write($batch->id, $item->id, 'review',
+                        "✅ Deterministic quality gate passed after {$done} pass(es) + one targeted fix — publishing.", 'success');
+                } else {
+                    $issues = $finalLint;
+                    AiActivityLog::write($batch->id, $item->id, 'review',
+                        'Hard rules still failing after final rewrite: '.implode('; ', array_slice($finalLint, 0, 5)), 'warning');
+                }
             }
         }
 

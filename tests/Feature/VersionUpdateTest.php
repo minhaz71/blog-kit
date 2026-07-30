@@ -22,7 +22,7 @@ class VersionUpdateTest extends TestCase
 
     public function test_version_service_reads_manifest_and_components(): void
     {
-        $this->assertSame((string) config('shopkit.version'), Version::core());
+        $this->assertSame((string) config('blogkit.version'), Version::core());
         $this->assertNotSame('', Version::core());
 
         $components = Version::components();
@@ -59,7 +59,7 @@ class VersionUpdateTest extends TestCase
             $this->assertContains($k, $keys);
         }
 
-        $this->artisan('shopkit:preflight'); // must run without error (exit code varies by env)
+        $this->artisan('blogkit:preflight'); // must run without error (exit code varies by env)
     }
 
     // ── Updater guards ────────────────────────────────────────────────
@@ -70,7 +70,7 @@ class VersionUpdateTest extends TestCase
             $this->markTestSkipped('This checkout is a git repo.');
         }
 
-        $this->artisan('shopkit:update')
+        $this->artisan('blogkit:update')
             ->expectsOutputToContain('not a git checkout')
             ->assertExitCode(1);
     }
@@ -82,7 +82,7 @@ class VersionUpdateTest extends TestCase
         }
 
         // Should never enter maintenance mode or create a backup on a dry run.
-        $this->artisan('shopkit:update', ['--dry-run' => true])->assertExitCode(0);
+        $this->artisan('blogkit:update', ['--dry-run' => true])->assertExitCode(0);
         $this->assertSame(0, \App\Models\Backup::count());
         $this->assertFalse(app()->isDownForMaintenance());
     }

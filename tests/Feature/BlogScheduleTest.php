@@ -167,15 +167,15 @@ class BlogScheduleTest extends TestCase
         $this->assertCount(3, $rows);
 
         // All recognized columns land under their canonical keys.
-        $this->assertSame('How to Spot Genuine TEREA Cartons Before You Pay', $rows[0]['name']);
+        $this->assertSame('How to Start Composting in a Small Apartment', $rows[0]['name']);
         $this->assertArrayHasKey('keywords', $rows[0]);
         $this->assertArrayHasKey('angle', $rows[0]);
         $this->assertSame('2026-08-01', $rows[0]['publish_date']);      // date only → 00:00
-        $this->assertSame('14:30', $rows[1]['publish_time'] ?? null);   // date + time
+        $this->assertSame('09:30', $rows[1]['publish_time'] ?? null);   // date + time
         $this->assertArrayNotHasKey('publish_date', $rows[2]);          // no date → batch settings
 
-        // Selling-unit fact rides into the research context.
-        $this->assertStringContainsString('full cartons only', $rows[0]['details']);
+        // An extra brief column rides into the research context verbatim.
+        $this->assertStringContainsString('bokashi', $rows[0]['details']);
     }
 
     // ── Held articles are NEVER lost: saved as drafts ─────────────────

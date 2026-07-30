@@ -19,11 +19,13 @@ use App\Models\AiImportItem;
  */
 class BlogWriter extends ProductWriter
 {
-    public const DEFAULT_SYSTEM = 'You are a senior content marketer and SEO blog writer for an ecommerce store. '
-        .'Write genuinely helpful, expert-level articles that read like an experienced human specialist — never like AI. '
+    public const DEFAULT_SYSTEM = 'You are a senior subject-matter expert and SEO content writer. '
+        .'Write genuinely helpful, expert-level articles on the assigned topic that read like an experienced human specialist, never like AI. '
         .'They must rank in Google AND Bing AND get cited by AI answer engines (ChatGPT, Perplexity, Google AI Overviews), '
-        .'build topical authority for the store\'s niche, and send ready-to-buy readers to the store\'s product pages. '
-        .'Honest, specific, experience-first; no hype, no fluff, no filler.';
+        .'build topical authority for the site\'s subject area, and guide the reader to a genuinely helpful next step. '
+        .'Honest, specific, experience-first; no hype, no fluff, no filler. '
+        .'Write about ANY topic the assignment gives you (technology, health, finance, travel, food, hobbies, business, science, lifestyle, etc.); '
+        .'never assume a specific product, brand, or industry unless the assignment states one.';
 
     public const BLOG_RULES = <<<'RULES'
 ARTICLE RULES (mandatory):
@@ -38,8 +40,9 @@ STRUCTURE:
 
 E-E-A-T & AUTHENTICITY:
 - Write from hands-on experience: practical observations, realistic expectations, correct terminology, honest trade-offs.
-- Cite concrete specifics (numbers, timings, versions, flavor notes, prices when given) — never vague adjectives.
-- No invented statistics, studies, reviews, or expert quotes. No medical or health claims for nicotine products (say "smoke-free experience", nothing more).
+- Cite concrete specifics (numbers, timings, measurements, versions, steps, costs when given) — never vague adjectives.
+- No invented statistics, studies, reviews, or expert quotes. For YMYL topics (health, medicine, finance, legal, safety), state only well-established information, avoid definitive personal advice, and tell the reader to consult a qualified professional; never fabricate credentials, guarantees, or outcomes.
+- If the assignment's topic is regulated or age-restricted, follow the assignment's stated compliance note and make no prohibited claims.
 - Include one honest limitation or "when this is NOT the right choice" note — trust and ranking signal.
 
 TOPIC DISCIPLINE:
@@ -67,9 +70,41 @@ RULES;
     public const SEMANTIC_SEO_RULES = <<<'RULES'
 SEMANTIC SEO (mandatory — write for the topic and its entities, not repeated keywords):
 
-ENTITY COVERAGE: where genuinely relevant to THIS article's topic, mention real-world entities naturally so the article demonstrates topical depth: IQOS, TEREA, ILUMA / ILUMA i / ILUMA i PRIME, Heated Tobacco, Smartcore Induction System, Philip Morris International, Menthol, Tobacco blend. Never force one in, never list them.
+ENTITY COVERAGE: mention the real-world entities a genuine expert on THIS article's topic would reference naturally — the relevant people, places, organizations, products, tools, standards, methods, and concepts — so the article demonstrates real topical depth. Draw them from the article's topic, the brief, and any ENTITIES listed in the assignment. Use correct proper names and terminology. Never invent an entity, never force one in, never list them mechanically.
 
-SEMANTIC HEADINGS: every H2/H3 must describe what the section actually answers, not restate the focus keyword. Question-form H2s (already required above) must vary in phrasing from this cluster's sibling articles — do not reuse the same question shape ("Is X compatible with Y?") across every article in the batch; phrase each around what THAT article's readers actually ask.
+SEMANTIC HEADINGS: every H2/H3 must describe what the section actually answers, not restate the focus keyword. Question-form H2s (already required above) must vary in phrasing from this cluster's sibling articles — do not reuse the same question shape across every article in the batch; phrase each around what THAT article's readers actually ask.
+RULES;
+
+    /**
+     * Article-flavored search + AI-answer rulebook. Replaces the product
+     * engine's SEARCH_ENGINE_RULES (which speaks "buyer / product term / spec
+     * table") so blog articles are optimized as articles, on any topic.
+     */
+    public const BLOG_SEARCH_RULES = <<<'RULES'
+SEARCH & AI-ANSWER OPTIMIZATION (mandatory — the article must rank on Google AND Bing AND get cited by AI answer engines):
+
+GOOGLE (Helpful Content + E-E-A-T):
+- People-first: every section answers a real question the reader has or removes a real doubt. Delete anything that exists only "for SEO".
+- Show first-hand experience and correct terminology for the topic — this is what Google's quality systems reward.
+- Internal links pass authority: link related articles and pages with descriptive anchors placed inside relevant sentences; NEVER generic anchors ("click here", "read more").
+- Primary keyword early and natural; after that use synonyms and related entities instead of repeating the exact phrase — unnatural repetition reads as stuffing.
+
+BING (Bing Webmaster Guidelines):
+- Bing weighs exact keyword placement more literally: put the primary term in the meta_title, in at least one H2, and in the first paragraph.
+- Bing favors clean, literal structure: short paragraphs, bullet lists, and tables parse and rank well.
+- meta_description is used more directly in Bing results — make it a clean, complete one-sentence summary.
+
+AI ANSWER ENGINES / AIO (Google AI Overviews, ChatGPT, Perplexity, Bing Copilot):
+- Use question-form H2/H3 headings where natural and follow each IMMEDIATELY with a direct, self-contained 40-60 word answer — that block is exactly what gets quoted.
+- Citable specifics beat adjectives: numbers, dates, steps, measurements, named examples. AI engines cite facts, not "the best".
+- Near the top, include one definition-style sentence the engine can lift as a summary ("X is a … that …").
+- FAQ answers must stand alone when quoted out of context: name the subject inside the answer; never answer with only "Yes".
+- Tables and lists are extraction-friendly — use them where the content is genuinely comparative or sequential.
+
+AUTHENTICITY:
+- Write like a knowledgeable practitioner sharing real experience, not a brochure.
+- Include one honest trade-off or limitation — authenticity is both a ranking and a trust signal.
+- NEVER fabricate reviews, ratings, "people say" claims, statistics, or studies.
 RULES;
 
     /** Blog-flavored critic rulebook for the reviewer seat (same JSON verdict protocol). */
@@ -78,10 +113,10 @@ You are a senior SEO content editor reviewing an AI-written blog article (JSON: 
 Judge it and report ONLY what must change:
 - SEO: meta lengths are NEVER blocking issues (they are auto-corrected mechanically) — meta_title aims 50-60 chars (63 acceptable), meta_description 150-164 chars. Primary keyword must be present DIRECTLY OR INDIRECTLY (the exact phrase, or its meaningful words/close variants spread across meta fields, headings, and early copy) — never demand exact-match placement in one specific field.
 - Search intent: the article must fully answer the question its title promises; flag missing core sub-topics.
-- E-E-A-T: hands-on experience signals, correct terminology, honest trade-offs, no invented facts/statistics/studies; no medical or health claims for nicotine products.
+- E-E-A-T: hands-on experience signals, correct terminology, honest trade-offs, no invented facts/statistics/studies; for YMYL topics no unqualified medical/financial/legal claims.
 - Readability: intro answers the core question in the first 2-3 sentences; paragraphs ≤4 sentences; scannable headings (question-form where natural), each followed by a direct self-contained answer.
-- Internal linking: 2-5 contextual in-sentence links with descriptive anchors (product names or article titles) — no link dumps, no generic anchors, no invented URLs.
-  IMPORTANT: link URLs come verbatim from the store's own catalog and are validated automatically elsewhere. NEVER flag a link's host or domain (including localhost / 127.0.0.1 on dev stores).
+- Internal linking: 2-5 contextual in-sentence links with descriptive anchors (article titles or page names) — no link dumps, no generic anchors, no invented URLs.
+  IMPORTANT: link URLs come verbatim from the site's own catalog and are validated automatically elsewhere. NEVER flag a link's host or domain (including localhost / 127.0.0.1 on dev sites).
 - FAQs: 5-8 self-contained pairs, answers name the subject.
 - Tone: no banned filler phrases, no AI-sounding patterns, distinct human voice.
 
@@ -144,10 +179,12 @@ RULES;
 
         $sections = [$base];
 
-        $sections[] = "STORE / BRAND BRIEF (context for every article):\n".trim($batch->prompt);
+        if (trim((string) $batch->prompt) !== '') {
+            $sections[] = "SITE / TOPIC BRIEF (context for every article):\n".trim($batch->prompt);
+        }
 
         if ($batch->niche) {
-            $sections[] = "NICHE (all articles in this batch build topical authority around this):\n".trim($batch->niche);
+            $sections[] = "SUBJECT AREA (all articles in this batch build topical authority around this):\n".trim($batch->niche);
         }
 
         $targeting = array_filter([
@@ -165,13 +202,13 @@ RULES;
 
         $sections[] = self::SEMANTIC_SEO_RULES;
 
-        // Store-wide facet vocabulary (same cached static block the product
-        // writer uses) — grounds flavor guides and comparisons in the
-        // canonical taxonomy so article claims never drift from what the
-        // product pages state.
-        if (($vocabulary = self::attributeVocabulary()) !== '') {
+        // Store-wide facet vocabulary — ONLY when the ecommerce module is on
+        // and a taxonomy actually exists. A pure blog has no product facets,
+        // so this block (and its DB query) is skipped entirely — no wasted
+        // tokens, no store framing leaking into general articles.
+        if (ecommerce_enabled() && ($vocabulary = self::attributeVocabulary()) !== '') {
             $sections[] = "PRODUCT FACT VOCABULARY (the store's canonical facets and allowed values):\n"
-                ."When an article states a product's flavor family, cooling level, tobacco strength, origin, pack size, or device compatibility, use EXACTLY these terms — never invent or paraphrase a facet value.\n\n"
+                ."When an article states a product's flavor family, cooling level, strength, origin, pack size, or device compatibility, use EXACTLY these terms — never invent or paraphrase a facet value.\n\n"
                 .$vocabulary;
         }
 
@@ -196,7 +233,8 @@ RULES;
         // any class outside the whitelist, so this is safe by construction.
         $sections[] = self::CLASS_TOOLKIT;
 
-        $sections[] = self::SEARCH_ENGINE_RULES;
+        // Article-flavored search rulebook (not the product engine's).
+        $sections[] = self::BLOG_SEARCH_RULES;
 
         if (! empty($batch->link_catalog)) {
             $lines = collect($batch->link_catalog)
@@ -204,17 +242,21 @@ RULES;
                 ->map(fn ($p) => '- '.$p['name'].' — '.$p['url'])
                 ->implode("\n");
 
+            // The catalog is labeled per entry (article / blog category / page /
+            // home / — and, only when the store module is on, product / product
+            // category). The instructions lead with articles so a pure blog
+            // links naturally; commercial targets are mentioned only as "when
+            // present", never assumed.
             $sections[] = <<<'LINKS'
 INTERNAL LINKING (you place the links while writing — this is the ONLY linking pass):
-The catalog below lists this site's linkable pages with live URLs — products, product categories, published articles, blog categories, and the home page (entries are labeled). While writing description_html, link 3-6 of them WHERE the mention genuinely helps the reader:
-- a PRODUCT when the advice applies to it or the reader would buy it next;
-- a PRODUCT CATEGORY when recommending a range ("the full TEREA UAE lineup");
-- a sibling ARTICLE that covers a sub-topic in depth (the natural "next read");
+The catalog below lists this site's linkable pages with live URLs (each entry is labeled by type). While writing description_html, link 3-6 of them WHERE the mention genuinely helps the reader:
+- a sibling ARTICLE that covers a sub-topic in depth (the natural "next read") — prefer these;
 - a BLOG CATEGORY when pointing at a whole topic archive;
-- the HOME PAGE at most once, on a natural brand mention.
+- the HOME PAGE at most once, on a natural brand/site mention;
+- a PRODUCT or PRODUCT CATEGORY only IF such entries appear in the catalog AND the advice genuinely leads there (never force a commercial link into an informational article).
 Rules:
 - Links sit INSIDE sentences, in context. NEVER a link list or "related posts" dump at the end.
-- Anchor text carries meaning for SEO: the linked page's natural name or a short keyword-bearing descriptive phrase — never "click here", "here", "read more", "this page".
+- Anchor text carries meaning for SEO: the linked page's natural name or a short descriptive phrase — never "click here", "here", "read more", "this page".
 - Never link this article to itself. Never invent or alter URLs — copy them exactly from the catalog.
 - VARY the linked pages between articles; link only what genuinely fits THIS topic. Not every type must appear in every article.
 LINKS."\n\nCATALOG (name — live URL):\n".$lines;
@@ -279,11 +321,45 @@ JSON;
      */
     public static function lengthDirective(array $row): string
     {
+        // An explicit per-article word target from the CSV/field wins over the
+        // role default — lets the author size any article precisely.
+        $target = (int) preg_replace('/\D+/', '', (string) ($row['target_words'] ?? $row['word_count'] ?? ''));
+        if ($target >= 300) {
+            $low = max(300, (int) round($target * 0.85));
+            $high = (int) round($target * 1.15);
+
+            return "{$low}-{$high} words (author-specified target ~{$target}). Cover the intent fully within this range; depth over padding.";
+        }
+
         return match ($row['role'] ?? null) {
             'pillar' => '1800-2500 words. This is the cluster PILLAR: cover the topic comprehensively (definitions, choices, comparisons, how-tos, honest limitations) so every spoke article can link back to a section here.',
             'spoke' => '900-1500 words. This is a SPOKE: answer its one specific intent completely and link the pillar for breadth — do not drift into sibling topics.',
-            'comparison' => '1200-1900 words. This is a COMPARISON article: cover every given facet difference, a comparison table, and a clear verdict — do not pad with generic content once the two products are fully compared.',
+            'comparison' => '1200-1900 words. This is a COMPARISON article: cover every given facet difference, a comparison table, and a clear verdict — do not pad with generic content once the two options are fully compared.',
             default => '700-1800 words, sized to the topic: a narrow question answered completely may stop near 700; a broad comparison or guide may need the top of the range. Cover the intent fully, then stop.',
         };
+    }
+
+    /**
+     * Neutral, any-topic keyword directive (the product engine's version says
+     * "set by the store owner"). Enforces the placements that actually move
+     * rankings: primary keyword in the title, an H2, and the first 100 words.
+     */
+    public static function keywordDirective(array $row): string
+    {
+        $keywords = static::keywordsFor($row);
+
+        if ($keywords === []) {
+            return '';
+        }
+
+        $block = "\n\nTARGET KEYWORDS (the search terms this article must rank for):"
+            ."\n- Primary: \"{$keywords[0]}\" — it MUST appear naturally in meta_title, in the first 100 words of description_html, and in at least one H2/H3 heading. Set focus_keyword to it.";
+
+        if (count($keywords) > 1) {
+            $block .= "\n- Secondary: ".implode(', ', array_map(fn ($k) => "\"{$k}\"", array_slice($keywords, 1)))
+                .' — weave each in naturally ONCE where it genuinely fits (copy, headings, FAQ answers, meta_description). Skip any that cannot fit naturally.';
+        }
+
+        return $block."\n- No stuffing: beyond these placements use synonyms and related entities, never forced exact-match repetition.";
     }
 }

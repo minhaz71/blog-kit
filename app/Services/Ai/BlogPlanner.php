@@ -76,7 +76,10 @@ class BlogPlanner
         }
 
         if (empty($batch->link_catalog)) {
-            $batch->link_catalog = $this->buildLinkCatalog($batch->link_scope ?: 'ecommerce');
+            // Default to the blog-only catalog unless the store module is on —
+            // a pure blog must not build (or link into) a product catalog.
+            $scope = $batch->link_scope ?: (ecommerce_enabled() ? 'ecommerce' : 'blog_only');
+            $batch->link_catalog = $this->buildLinkCatalog($scope);
         }
 
         $batch->forceFill([
@@ -199,31 +202,44 @@ class BlogPlanner
             throw new \RuntimeException('Give the batch a niche (or a list of title ideas) so the agent knows what to write about.');
         }
 
-        $count = max(1, min(30, (int) $batch->topic_count));
+        // Sensible default when the admin left the count blank (0/null) —
+        // never collapse to a 1-topic plan by accident.
+        $count = max(1, min(30, (int) ($batch->topic_count ?: 10)));
 
-        $productNames = Product::query()->where('status', 'published')
-            ->orderByDesc('is_featured')->limit(40)->pluck('name')->implode('; ');
+        $commerce = ecommerce_enabled();
 
-        $system = <<<'SYS'
-You are an SEO content strategist designing a topic cluster (pillar-and-spoke) for an ecommerce store's blog.
+        // Product context only when the store module is on — a pure blog
+        // plans for topical authority, not commercial relevance.
+        $productNames = $commerce
+            ? Product::query()->where('status', 'published')
+                ->orderByDesc('is_featured')->limit(40)->pluck('name')->implode('; ')
+            : '';
+
+        $intentMix = $commerce
+            ? 'informational guides, comparisons ("X vs Y"), buying/choosing help, troubleshooting/how-to, local-intent where the targeting suggests it'
+            : 'informational guides, how-tos, comparisons ("X vs Y"), beginner explainers, common questions/FAQs, and deeper "advanced" angles';
+
+        $audience = $commerce ? "an ecommerce store's blog" : 'a content blog building topical authority to rank globally';
+
+        $system = <<<SYS
+You are an SEO content strategist designing a topic cluster (pillar-and-spoke) for {$audience}.
 Rules:
-- 1 PILLAR: the broad, high-volume guide covering the niche; the remaining topics are SPOKES: specific long-tail questions/comparisons/how-tos that each stand alone AND deepen one facet of the pillar.
+- 1 PILLAR: the broad, high-volume guide covering the subject; the remaining topics are SPOKES: specific long-tail questions/comparisons/how-tos that each stand alone AND deepen one facet of the pillar.
 - Every topic must have clear search intent a real person types, and must NOT duplicate or overlap another topic in the cluster or any existing article title provided.
-- Mix intents across the cluster: informational guides, comparisons ("X vs Y"), buying/choosing help, troubleshooting/how-to, local-intent where the store targeting suggests it.
+- Mix intents across the cluster: {$intentMix}.
 - Map keywords per topic: primary = the exact phrase to rank for; 2-4 secondary variations.
-- Working titles: specific and compelling, ≤70 chars, no clickbait, no colons-everywhere pattern, varied phrasing across the cluster.
+- Working titles: specific and compelling, 70 chars or fewer, no clickbait, no colons-everywhere pattern, varied phrasing across the cluster.
 Return ONLY JSON: {"topics": [{"title": "...", "role": "pillar"|"spoke", "primary_keyword": "...", "secondary_keywords": ["..."], "angle": "<one sentence: the specific take/promise of this article>", "outline": ["<4-7 section hints>"]}]}
 SYS;
 
-        $user = "NICHE: ".trim($batch->niche)
-            ."\n\nSTORE BRIEF:\n".trim($batch->prompt)
+        $user = "SUBJECT AREA: ".trim($batch->niche)
+            .(trim((string) $batch->prompt) !== '' ? "\n\nSITE / TOPIC BRIEF:\n".trim($batch->prompt) : '')
             .($batch->target_country || $batch->target_city
                 ? "\nTARGETING: ".trim(($batch->target_city ? $batch->target_city.', ' : '').(string) $batch->target_country)
                 : '')
             .($productNames ? "\n\nSTORE PRODUCTS (make spokes commercially relevant where natural):\n".$productNames : '')
             .($existingTitles !== [] ? "\n\nEXISTING ARTICLE TITLES (do not duplicate any):\n- ".implode("\n- ", array_slice($existingTitles, 0, 60)) : '')
-            ."\n\nDesign the cluster now: exactly {$count} topics (1 pillar + ".($count - 1)." spokes"
-            .($count === 1 ? '' : '').").";
+            ."\n\nDesign the cluster now: exactly {$count} topics (1 pillar + ".($count - 1)." spokes).";
 
         $llm = LlmClient::for($batch->provider, $batch->model)->withContext('plan', $batch->id, null);
 

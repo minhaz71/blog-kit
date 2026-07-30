@@ -45,11 +45,11 @@ class MaintenanceModeTest extends TestCase
 
     public function test_cli_command_toggles_maintenance(): void
     {
-        $this->artisan('shopkit:maintenance on')->assertSuccessful();
+        $this->artisan('blogkit:maintenance on')->assertSuccessful();
         $this->assertTrue((bool) setting('general.maintenance_mode'));
 
         \Illuminate\Support\Facades\Cache::forget('settings.general');
-        $this->artisan('shopkit:maintenance off')->assertSuccessful();
+        $this->artisan('blogkit:maintenance off')->assertSuccessful();
         \Illuminate\Support\Facades\Cache::forget('settings.general');
         $this->assertFalse((bool) setting('general.maintenance_mode'));
     }

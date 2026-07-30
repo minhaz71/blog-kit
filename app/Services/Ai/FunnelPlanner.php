@@ -154,6 +154,28 @@ class FunnelPlanner
 
     protected function research(LlmClient $llm, AiImportBatch $batch): array
     {
+        // BLOG MODE (store off): the dossier is researched from the subject
+        // area + brief, NOT a product catalog. No "grounded in catalog / no
+        // invented products" clamp — there is no catalog to ground in.
+        if (! ecommerce_enabled()) {
+            $system = <<<'SYS'
+You are an audience-research analyst for a content blog. From the subject area and brief, produce a compact research dossier of what real readers search for.
+Return ONLY JSON:
+{"store_summary": "<2-3 sentences: what this blog covers and for whom>",
+ "audiences": ["<distinct reader types>"],
+ "pain_points": [{"pain": "<a specific question, confusion, or problem a real reader has>", "affects": "<who>", "product_area": "<the sub-topic it relates to>"}],
+ "queries": ["<real search phrases people type — questions, comparisons, how-tos>"],
+ "needs": ["<underlying reader needs and jobs-to-be-done>"]}
+Rules: 10-20 pain points, 15-30 queries, all realistic for the subject area given. Specific beats generic.
+SYS;
+
+            $user = 'SUBJECT AREA:\n'.trim((string) ($batch->niche ?: $batch->prompt))
+                .(trim((string) $batch->prompt) !== '' ? "\n\nBLOG BRIEF:\n".trim((string) $batch->prompt) : '')
+                .($batch->target_country ? "\n\nTARGET MARKET: ".trim(($batch->target_city ? $batch->target_city.', ' : '').$batch->target_country) : '');
+
+            return LlmClient::parseJson($llm->complete($system, $user, maxTokens: 6000, cacheStatic: true));
+        }
+
         $products = Product::query()->where('status', 'published')
             ->orderByDesc('is_featured')->limit(80)
             ->get(['name', 'price'])
@@ -188,28 +210,36 @@ SYS;
     protected function designClusters(LlmClient $llm, AiImportBatch $batch, array $insights, int $target): array
     {
         $clusterCount = max(3, min(12, (int) ceil($target / 12)));
+        $commerce = ecommerce_enabled();
+        $scope = $commerce ? 'ecommerce' : 'blog_only';
 
-        $bofu = collect((new BlogPlanner)->buildLinkCatalog('ecommerce'))
-            ->filter(fn ($l) => ! str_contains($l['name'], '(blog category)'))
+        $bofu = collect((new BlogPlanner)->buildLinkCatalog($scope))
             ->take(60)
             ->map(fn ($l) => $l['name'].' => '.$l['url'])
             ->implode("\n");
 
-        $system = <<<'SYS'
+        if ($commerce) {
+            $system = <<<'SYS'
 You are an SEO content strategist. Design topic CLUSTERS for an ecommerce blog. The store's product and category pages are the BOTTOM of the funnel — the clusters must generate TOP funnel (educational, awareness) and MIDDLE funnel (comparison, consideration, choosing help) articles that funnel readers toward those pages.
 Return ONLY JSON:
 {"clusters": [{"name": "<short cluster name>", "theme": "<what this cluster covers and for whom>", "pillar_focus": "<the middle-funnel pillar topic anchoring the cluster>", "bofu_targets": ["<urls from the provided list this cluster should funnel into>"]}]}
-Rules: each cluster maps to real pain points and queries from the dossier; clusters must not overlap each other; every cluster names 2-5 bofu_targets chosen ONLY from the provided URL list. When a PRODUCT FACET TAXONOMY is provided, prefer anchoring clusters on real facet axes (e.g. a cooling-level guide cluster, a strength-tier cluster, an origin-comparison cluster) — facet-driven clusters map to how buyers actually narrow their choice.
+Rules: each cluster maps to real pain points and queries from the dossier; clusters must not overlap each other; every cluster names 2-5 bofu_targets chosen ONLY from the provided URL list. When a PRODUCT FACET TAXONOMY is provided, prefer anchoring clusters on real facet axes — facet-driven clusters map to how buyers actually narrow their choice.
 SYS;
-
-        // The structured facet taxonomy is the store's real semantic map —
-        // giving it to the cluster designer yields facet-driven clusters
-        // (strength tiers, cooling levels, origins) instead of clusters
-        // guessed from product names alone.
-        $taxonomy = ProductWriter::attributeVocabulary();
+            $taxonomy = ProductWriter::attributeVocabulary();
+            $linkLabel = 'BOTTOM-FUNNEL PAGES (choose bofu_targets from these URLs only)';
+        } else {
+            $system = <<<'SYS'
+You are an SEO content strategist. Design topic CLUSTERS for a content blog to build topical authority and rank globally. Each cluster is a hub-and-spoke set: a broad pillar topic plus specific spoke topics that each stand alone and deepen one facet of the pillar. Cover the full range of search intent for the subject: informational, how-to, comparison, and common questions.
+Return ONLY JSON:
+{"clusters": [{"name": "<short cluster name>", "theme": "<what this cluster covers and for whom>", "pillar_focus": "<the pillar topic anchoring the cluster>", "bofu_targets": ["<existing article/category URLs from the provided list this cluster should link to, if any>"]}]}
+Rules: each cluster maps to real pain points and queries from the dossier; clusters must not overlap each other; bofu_targets are internal-link targets chosen ONLY from the provided URL list (may be empty if none fit).
+SYS;
+            $taxonomy = '';
+            $linkLabel = 'EXISTING PAGES (internal-link targets — choose only from these URLs, may be empty)';
+        }
 
         $user = 'RESEARCH DOSSIER:\n'.json_encode($insights, JSON_UNESCAPED_UNICODE)
-            ."\n\nBOTTOM-FUNNEL PAGES (choose bofu_targets from these URLs only):\n".$bofu
+            ."\n\n{$linkLabel}:\n".$bofu
             .($taxonomy !== '' ? "\n\nPRODUCT FACET TAXONOMY (candidate cluster axes — attribute: values):\n".$taxonomy : '')
             ."\n\nDesign exactly {$clusterCount} clusters now.";
 
@@ -230,10 +260,12 @@ SYS;
     {
         $candidates = [];
         $ask = $needed + (int) ceil($needed * 0.25); // overshoot: the gates will cut
+        $commerce = ecommerce_enabled();
 
-        $catalogUrls = collect((new BlogPlanner)->buildLinkCatalog('ecommerce'))->pluck('url')->all();
+        $catalogUrls = collect((new BlogPlanner)->buildLinkCatalog($commerce ? 'ecommerce' : 'blog_only'))->pluck('url')->all();
 
-        $system = <<<'SYS'
+        if ($commerce) {
+            $system = <<<'SYS'
 You are an SEO content strategist generating blog TITLE IDEAS with full briefs for an ecommerce content funnel.
 Return ONLY JSON:
 {"ideas": [{"title": "<specific, compelling, <=70 chars, no clickbait, varied phrasing>",
@@ -255,6 +287,30 @@ Rules:
 - link_targets: choose ONLY from the provided URL list.
 - Titles must be distinct from each other in topic, not just wording. No em dashes anywhere.
 SYS;
+        } else {
+            $system = <<<'SYS'
+You are an SEO content strategist generating blog TITLE IDEAS with full briefs for a content blog building topical authority.
+Return ONLY JSON:
+{"ideas": [{"title": "<specific, compelling, <=70 chars, no clickbait, varied phrasing>",
+ "cluster": "<one of the given cluster names>",
+ "role": "pillar"|"spoke",
+ "funnel_stage": "top"|"middle",
+ "primary_keyword": "<exact phrase to rank for>",
+ "secondary_keywords": ["<2-4 variations>"],
+ "pain_point": "<the specific reader question or problem this answers>",
+ "search_query": "<the real phrase a person types>",
+ "audience_need": "<what the reader is trying to achieve>",
+ "angle": "<one sentence: this article's specific take/promise>",
+ "outline": ["<4-7 section hints (the table-of-contents idea)>"],
+ "link_targets": ["<0-4 URLs from the provided list this article should link to, if any fit>"]}]}
+Rules:
+- funnel_stage="top" = informational/awareness (explain, teach, answer). funnel_stage="middle" = comparison/decision (help the reader evaluate and choose). Cover a healthy mix of both.
+- Every idea grounded in a real pain point or query from the dossier. Search intent must be something a real person types.
+- CANONICAL GUARD: never propose a title whose topic/intent is the same as, similar to, or overlapping ANY title in the EXISTING or REJECTED lists — even reworded. If in doubt, skip the topic entirely.
+- link_targets: choose ONLY from the provided URL list (may be empty).
+- Titles must be distinct from each other in topic, not just wording. No em dashes anywhere.
+SYS;
+        }
 
         $user = 'RESEARCH DOSSIER:\n'.json_encode($insights, JSON_UNESCAPED_UNICODE)
             ."\n\nCLUSTERS:\n".json_encode($clusters, JSON_UNESCAPED_UNICODE)
@@ -312,7 +368,7 @@ SYS;
         // routinely returns in a slightly different shape ("/terea-amber"
         // vs "https://site/terea-amber/") instead of discarding them.
         $catalogByPath = [];
-        foreach (collect((new BlogPlanner)->buildLinkCatalog('ecommerce'))->pluck('url') as $url) {
+        foreach (collect((new BlogPlanner)->buildLinkCatalog(ecommerce_enabled() ? 'ecommerce' : 'blog_only'))->pluck('url') as $url) {
             $catalogByPath[$this->normalizeUrlPath((string) $url)] = (string) $url;
         }
 

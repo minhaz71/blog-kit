@@ -421,15 +421,39 @@ class SchemaGenerator
             'url' => $post->url(),
             'datePublished' => $post->published_at?->toIso8601String(),
             'dateModified' => $post->updated_at?->toIso8601String(),
-            'author' => $this->person($post->author),
+            // E-E-A-T author byline. A post with no/deleted author must NOT
+            // crash the whole JSON-LD graph — fall back to the Organization
+            // as author (person() type-hints a non-null User).
+            'author' => $post->author
+                ? $this->person($post->author)
+                : ['@id' => url('/').'#organization'],
             'publisher' => ['@id' => url('/').'#organization'],
             'mainEntityOfPage' => $post->url(),
+            // Ties the article into the site entity graph (GEO / knowledge graph).
+            'isPartOf' => ['@id' => url('/').'#website'],
         ];
 
         if ($post->featured_image) {
-            // Array form per Google's Article docs (multiple images allowed).
-            $schema['image'] = [$post->featuredImageUrl()];
+            // ImageObject with intrinsic dimensions when known (better for
+            // Google image/Article rich results and AI answer surfaces);
+            // falls back to the bare URL array form otherwise.
+            $dimensions = image_dimensions($post->featured_image);
+            $schema['image'] = $dimensions
+                ? [
+                    '@type' => 'ImageObject',
+                    'url' => $post->featuredImageUrl(),
+                    'width' => $dimensions[0],
+                    'height' => $dimensions[1],
+                ]
+                : [$post->featuredImageUrl()];
         }
+
+        // Speakable: the headline + summary are safe to read aloud / lift as
+        // the answer — a first-class signal for voice and AI answer engines.
+        $schema['speakable'] = [
+            '@type' => 'SpeakableSpecification',
+            'cssSelector' => ['h1', '.bd-article > p:first-of-type'],
+        ];
 
         if ($post->excerpt) {
             $schema['description'] = $this->plainText($post->excerpt, 300);
