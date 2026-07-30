@@ -1,0 +1,81 @@
+/* ── Live search dropdown ────────────────────────────────────────────
+   Results panel under the header search inputs. Brand-token themed so it
+   recolors with the store. */
+
+.hsearch { position: relative; }
+
+.hsearch-panel {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    right: 0;
+    min-width: 20rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.9rem;
+    box-shadow: 0 12px 32px -8px rgba(15, 23, 42, 0.22);
+    padding: 0.35rem;
+    z-index: 60;
+}
+.hsearch-panel[hidden] { display: none; }
+
+.hs-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.6rem;
+    text-decoration: none;
+    color: var(--ink, #111827);
+}
+.hs-item:hover,
+.hs-item.is-active {
+    background: var(--brand-soft, #f0fdfa);
+}
+
+.hs-thumb {
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.5rem;
+    background: #f3f4f6;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.hs-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+.hs-body { display: flex; flex-direction: column; min-width: 0; }
+.hs-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.hs-price { font-size: 0.8rem; color: var(--brand-dark, #115e59); font-weight: 600; }
+.hs-price s { color: #9ca3af; font-weight: 400; margin-left: 0.25rem; }
+
+.hs-empty { padding: 0.85rem 0.75rem; font-size: 0.875rem; color: #6b7280; }
+
+.hs-all {
+    display: block;
+    margin-top: 0.25rem;
+    padding: 0.6rem 0.75rem;
+    border-top: 1px solid #f1f5f9;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--brand, #0f766e);
+    text-decoration: none;
+    border-radius: 0 0 0.6rem 0.6rem;
+}
+.hs-all:hover,
+.hs-all.is-active { background: var(--brand-soft, #f0fdfa); }
+
+/* Mobile header search: panel spans the full width of the bar. */
+@media (max-width: 767px) {
+    .hsearch-panel { min-width: 0; left: 0; right: 0; }
+}

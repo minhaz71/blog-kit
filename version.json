@@ -1,0 +1,20 @@
+{
+    "blogkit": "1.0.0",
+    "product": "Hemdox Blog Kit",
+    "released": "2026-07-30",
+    "requires": {
+        "php": "8.3.0"
+    },
+    "components": {
+        "ai-blog-writer": "1.1.0",
+        "blog-idea-generator": "1.0.0",
+        "link-agent": "1.0.0",
+        "backup": "1.2.0",
+        "security": "1.2.0",
+        "seo": "1.3.0",
+        "storefront": "1.2.0",
+        "ai-product-writer": "1.2.0",
+        "product-templates": "1.0.0",
+        "payments": "1.1.0"
+    }
+}

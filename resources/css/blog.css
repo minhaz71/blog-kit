@@ -1,0 +1,393 @@
+/* ── Blog article design ────────────────────────────────────────────
+   Two layers, both riding the storefront --brand tokens (re-theming the
+   store re-themes every article):
+
+   1. TAG-BASED (.bd-article): every plain semantic tag — h2/h3/p/ul/ol/
+      table/blockquote/a/img — is styled, so ANY article (AI-written or
+      hand-written, zero classes) looks designed and responsive. Same
+      approach as .pd-content on products.
+   2. COMPONENTS (bd-*): the class vocabulary the AI blog writer may use
+      (BlogWriter::CONTENT_CLASSES — the publisher strips anything else)
+      for callouts, tips, steps, pros/cons, verdicts, FAQs. */
+
+/* ── 1. Tag-based layer ─────────────────────────────────────────── */
+
+.bd-article {
+    color: var(--ink-soft);
+    line-height: 1.75;
+    font-size: clamp(0.95rem, 0.9rem + 0.2vw, 1.0625rem);
+}
+.bd-article > :first-child { margin-top: 0 !important; }
+
+/* Section headings: brand accent bar, roomy rhythm, anchor-friendly. */
+.bd-article h2 {
+    font-size: clamp(1.3rem, 1.12rem + 0.9vw, 1.6rem);
+    font-weight: 800;
+    color: var(--ink);
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+    margin: 2.6rem 0 0.9rem;
+    padding-left: 0.85rem;
+    position: relative;
+}
+.bd-article h2::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.18em;
+    bottom: 0.18em;
+    width: 4px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--brand), var(--brand-ring));
+}
+.bd-article h3 {
+    font-size: clamp(1.1rem, 1.02rem + 0.4vw, 1.25rem);
+    font-weight: 700;
+    color: var(--brand-dark);
+    margin: 1.7rem 0 0.55rem;
+}
+
+.bd-article p { margin: 0.75rem 0; max-width: 76ch; }
+.bd-article strong { color: var(--ink); font-weight: 650; }
+
+/* Links: brand, obvious, touch-friendly. */
+.bd-article a {
+    color: var(--brand);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--brand-ring);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+    transition: color 0.15s;
+}
+.bd-article a:hover { color: var(--brand-dark); text-decoration-color: currentColor; }
+
+/* Bullets: brand dot markers (bd-proscons keeps its own ✓/✕ markers). */
+.bd-article ul:not([class]) { margin: 0.85rem 0; padding-left: 0.25rem; list-style: none; }
+.bd-article ul:not([class]) > li { position: relative; margin: 0.45rem 0; padding-left: 1.55rem; }
+.bd-article ul:not([class]) > li::before {
+    content: "";
+    position: absolute;
+    left: 0.3rem;
+    top: 0.62em;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.bd-article li > p { margin: 0; }
+
+/* Numbered lists: circled brand counters (bd-steps has its own). */
+.bd-article ol:not([class]) { margin: 0.95rem 0; padding-left: 0.25rem; list-style: none; counter-reset: bd-item; }
+.bd-article ol:not([class]) > li { position: relative; margin: 0.6rem 0; padding-left: 2.3rem; counter-increment: bd-item; }
+.bd-article ol:not([class]) > li::before {
+    content: counter(bd-item);
+    position: absolute;
+    left: 0;
+    top: 0.1em;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--brand-dark);
+    background: var(--brand-soft);
+    border: 1.5px solid var(--brand-ring);
+}
+
+.bd-article blockquote {
+    margin: 1.3rem 0;
+    padding: 0.9rem 1.15rem;
+    border-radius: 0.75rem;
+    background: var(--brand-soft);
+    border-left: 4px solid var(--brand);
+    color: var(--brand-dark);
+    font-style: italic;
+}
+.bd-article blockquote p { margin: 0.25rem 0; }
+
+/* Tables: rounded card, brand header, zebra rows, phone-safe scroll. */
+.bd-article table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 1.4rem 0;
+    font-size: 0.92rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.9rem;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.bd-article th {
+    text-align: left;
+    padding: 0.7rem 0.9rem;
+    font-weight: 700;
+    color: var(--brand-dark);
+    background: var(--brand-soft);
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+.bd-article td { padding: 0.68rem 0.9rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+.bd-article tbody tr:last-child td { border-bottom: 0; }
+.bd-article tbody tr:nth-child(even) td { background: #f8fafc; }
+.bd-article tbody tr td:first-child { font-weight: 600; color: var(--ink); }
+
+/* Images: rounded cards, never overflow. */
+.bd-article img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.9rem;
+    box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.18);
+    margin: 1.4rem 0;
+}
+
+@media (max-width: 640px) {
+    .bd-article { line-height: 1.7; }
+    .bd-article h2 { margin-top: 2rem; }
+    .bd-article table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .bd-article table td, .bd-article table th { min-width: 9.5rem; }
+}
+
+/* ── 2. Component layer (bd-* classes) ──────────────────────────── */
+
+/* Key-insight callout */
+.prose .bd-callout {
+    margin: 1.5rem 0;
+    padding: 1rem 1.25rem;
+    border-radius: 0.9rem;
+    background: var(--brand-soft);
+    border-left: 4px solid var(--brand);
+    color: var(--brand-dark);
+}
+.prose .bd-callout > :first-child { margin-top: 0; }
+.prose .bd-callout > :last-child { margin-bottom: 0; }
+
+/* Practical tip */
+.prose .bd-tip {
+    margin: 1.5rem 0;
+    padding: 1rem 1.25rem 1rem 3rem;
+    border-radius: 0.9rem;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #14532d;
+    position: relative;
+}
+.prose .bd-tip::before {
+    content: "💡";
+    position: absolute;
+    left: 1rem;
+    top: 0.95rem;
+}
+.prose .bd-tip > :first-child { margin-top: 0; }
+.prose .bd-tip > :last-child { margin-bottom: 0; }
+
+/* Caution / "when this is NOT for you" */
+.prose .bd-warning {
+    margin: 1.5rem 0;
+    padding: 1rem 1.25rem 1rem 3rem;
+    border-radius: 0.9rem;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #78350f;
+    position: relative;
+}
+.prose .bd-warning::before {
+    content: "⚠️";
+    position: absolute;
+    left: 1rem;
+    top: 0.95rem;
+}
+.prose .bd-warning > :first-child { margin-top: 0; }
+.prose .bd-warning > :last-child { margin-bottom: 0; }
+
+/* Numbered how-to steps — circled brand counters */
+.prose ol.bd-steps {
+    margin: 1.25rem 0;
+    padding-left: 0.25rem;
+    list-style: none;
+    counter-reset: bd-step;
+}
+.prose ol.bd-steps > li {
+    position: relative;
+    margin: 0.85rem 0;
+    padding-left: 2.6rem;
+    counter-increment: bd-step;
+}
+.prose ol.bd-steps > li::before {
+    content: counter(bd-step);
+    position: absolute;
+    left: 0;
+    top: 0.05em;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--brand-dark);
+    background: var(--brand-soft);
+    border: 1.5px solid var(--brand-ring);
+}
+
+/* Pros & cons — wrapper holding exactly two <ul> (pros first) */
+.prose .bd-proscons {
+    display: grid;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+@media (min-width: 640px) {
+    .prose .bd-proscons { grid-template-columns: 1fr 1fr; }
+}
+.prose .bd-proscons > ul {
+    margin: 0;
+    padding: 1rem 1.25rem;
+    border-radius: 0.9rem;
+    list-style: none;
+}
+.prose .bd-proscons > ul:first-child {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+}
+.prose .bd-proscons > ul:last-child {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+.prose .bd-proscons > ul > li {
+    position: relative;
+    margin: 0.45rem 0;
+    padding-left: 1.6rem;
+}
+.prose .bd-proscons > ul:first-child > li::before {
+    content: "✓";
+    position: absolute;
+    left: 0.15rem;
+    font-weight: 700;
+    color: #16a34a;
+}
+.prose .bd-proscons > ul:last-child > li::before {
+    content: "✕";
+    position: absolute;
+    left: 0.15rem;
+    font-weight: 700;
+    color: #dc2626;
+}
+
+/* Bottom-line verdict */
+.prose .bd-verdict {
+    margin: 1.75rem 0;
+    padding: 1.1rem 1.35rem;
+    border-radius: 0.9rem;
+    background: linear-gradient(135deg, var(--brand-soft), #ffffff);
+    border: 1.5px solid var(--brand-ring);
+}
+.prose .bd-verdict > :first-child { margin-top: 0; }
+.prose .bd-verdict > :last-child { margin-bottom: 0; }
+.prose .bd-verdict strong { color: var(--brand-dark); }
+
+/* In-body FAQ block */
+.prose .bd-faq {
+    margin: 1.5rem 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.9rem;
+    overflow: hidden;
+}
+.prose .bd-faq > * {
+    margin: 0;
+    padding: 0.85rem 1.1rem;
+}
+.prose .bd-faq > h3, .prose .bd-faq > h4, .prose .bd-faq > p > strong:only-child {
+    background: #f8fafc;
+}
+.prose .bd-faq > * + * {
+    border-top: 1px solid #f1f5f9;
+}
+
+/* Wide-table scroll wrapper — tables never squish on phones */
+.prose .bd-table-wrap {
+    margin: 1.5rem 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.prose .bd-table-wrap > table {
+    margin: 0;
+    min-width: 32rem;
+}
+
+/* ── Table of contents (.bd-toc) ───────────────────────────────────────
+   The "In this article" box on single blog posts. Branded card, clear
+   hierarchy for h2 vs nested h3 items, comfortable tap targets, fully
+   responsive. Styled here (external, cached) — no inline CSS on the page. */
+.bd-toc {
+    margin: 2rem 0;
+    border: 1px solid var(--brand-ring, #99f6e4);
+    border-radius: 1rem;
+    background:
+        linear-gradient(0deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.6)),
+        var(--brand-soft, #f0fdfa);
+    padding: 1.15rem 1.35rem 1.25rem;
+}
+.bd-toc__title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--brand-dark, #115e59);
+}
+.bd-toc__title svg { width: 1rem; height: 1rem; flex: none; }
+
+.bd-toc__list { margin: 0; padding: 0; list-style: none; counter-reset: bd-toc; }
+.bd-toc__list li { margin: 0; }
+
+.bd-toc__list a {
+    display: block;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.5rem;
+    color: var(--ink, #1f2937);
+    font-size: 0.92rem;
+    line-height: 1.45;
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.bd-toc__list a:hover,
+.bd-toc__list a:focus-visible {
+    background: #fff;
+    color: var(--brand, #0f766e);
+}
+
+/* Top-level (h2) items: numbered, slightly bolder. */
+.bd-toc__item--2 { counter-increment: bd-toc; }
+.bd-toc__item--2 > a { font-weight: 600; }
+.bd-toc__item--2 > a::before {
+    content: counter(bd-toc) ".";
+    display: inline-block;
+    min-width: 1.35rem;
+    margin-right: 0.15rem;
+    color: var(--brand, #0f766e);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Nested (h3) items: indented with a guide rail, no number. */
+.bd-toc__item--3 > a {
+    margin-left: 1.5rem;
+    padding-left: 0.85rem;
+    border-left: 2px solid var(--brand-ring, #99f6e4);
+    color: #4b5563;
+    font-size: 0.88rem;
+}
+.bd-toc__item--3 > a:hover { color: var(--brand, #0f766e); }
+
+@media (max-width: 640px) {
+    .bd-toc { margin: 1.5rem 0; padding: 1rem 1.1rem; border-radius: 0.85rem; }
+    .bd-toc__list a { padding: 0.45rem 0.5rem; }        /* larger tap target */
+    .bd-toc__item--3 > a { margin-left: 0.85rem; }
+}

@@ -1,0 +1,155 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+@plugin '@tailwindcss/forms';
+@import './catalogue.css';
+@import './admin-bar.css';
+@import './blog.css';
+@import './whatsapp.css';
+@import './search.css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+[x-cloak] {
+    display: none !important;
+}
+
+/* ── Interactive feedback (storefront-wide, differentiated by role) ─────
+   Every clickable control must LOOK clickable and CONFIRM the click:
+   - Primary actions (brand-filled: add to cart, checkout, submit) lift
+     with a shadow on hover and press down (scale) on click.
+   - Utility/bordered controls (steppers, outline buttons) tint on hover
+     and press with a slightly stronger tint + scale.
+   - Everything gets a pointer cursor and smooth transitions. */
+:where(button, [role="button"], input[type="submit"]):not(:disabled) {
+    cursor: pointer;
+}
+:where(button, [role="button"], input[type="submit"]) {
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease,
+        box-shadow .15s ease, transform .08s ease, opacity .15s ease;
+}
+/* Primary (brand-filled) buttons and button-styled links: hover lift + press. */
+:where(button, a, input[type="submit"]).bg-indigo-600:hover:not(:disabled) {
+    box-shadow: 0 6px 16px -6px rgb(0 0 0 / .35);
+}
+:where(button, a, input[type="submit"]).bg-indigo-600:active:not(:disabled) {
+    transform: scale(.97);
+    box-shadow: none;
+}
+a.bg-indigo-600 { transition: background-color .15s ease, box-shadow .15s ease, transform .08s ease; }
+/* Bordered utility buttons (qty steppers, outline actions): press feedback. */
+button[class*="border-"]:active:not(:disabled) {
+    transform: scale(.95);
+}
+
+/* ── Brand tokens ───────────────────────────────────────────────────────
+   Single source of truth for the storefront's brand color. The Appearance
+   settings theme partial overrides --brand at runtime, so recoloring the
+   store recolors descriptions, thumbnails and delivery cards together. */
+:root {
+    --brand: #0f766e;
+    --brand-dark: #115e59;
+    --brand-soft: #f0fdfa;
+    --brand-ring: #99f6e4;
+    --ink: #111827;
+    --ink-soft: #374151;
+}
+
+/* ── Product description content (.pd-content) ─────────────────────────
+   Canonical styling for AI-written product copy: semantic HTML in
+   (h2/h3/p/ul/ol/table/blockquote/a), branded modern design out. Fully
+   responsive; lives in this single compiled stylesheet — every product
+   gets identical styling with zero inline CSS. */
+.pd-content { color: var(--ink-soft); line-height: 1.75; font-size: clamp(.94rem, .9rem + .2vw, 1rem); }
+.pd-content > :first-child { margin-top: 0 !important; }
+
+/* Section headings: brand accent bar + roomy rhythm. */
+.pd-content h2 {
+    font-size: clamp(1.25rem, 1.1rem + .8vw, 1.5rem);
+    font-weight: 800; color: var(--ink); letter-spacing: -.015em; line-height: 1.25;
+    margin: 2.4rem 0 .8rem; padding-left: .8rem; position: relative;
+}
+.pd-content h2::before {
+    content: ""; position: absolute; left: 0; top: .18em; bottom: .18em;
+    width: 4px; border-radius: 999px;
+    background: linear-gradient(180deg, var(--brand), var(--brand-ring));
+}
+.pd-content h3 { font-size: clamp(1.05rem, 1rem + .3vw, 1.2rem); font-weight: 700; color: var(--brand-dark); margin: 1.5rem 0 .5rem; }
+
+.pd-content p { margin: .7rem 0; max-width: 74ch; }
+.pd-content strong { color: var(--ink); font-weight: 650; }
+
+/* Links: brand, obvious, touch-friendly. */
+.pd-content a { color: var(--brand); font-weight: 600; text-decoration: underline; text-decoration-color: var(--brand-ring); text-decoration-thickness: 2px; text-underline-offset: 3px; transition: color .15s; }
+.pd-content a:hover { color: var(--brand-dark); text-decoration-color: currentColor; }
+
+/* Bullets: brand dot markers; the AI wraps <p> inside <li> — flatten it. */
+.pd-content ul { margin: .8rem 0; padding-left: .25rem; list-style: none; }
+.pd-content ul > li { position: relative; margin: .45rem 0; padding-left: 1.55rem; }
+.pd-content ul > li::before {
+    content: ""; position: absolute; left: .3rem; top: .62em;
+    width: .5rem; height: .5rem; border-radius: 999px;
+    background: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.pd-content li > p { margin: 0; }
+.pd-content li > p + p { margin-top: .35rem; }
+
+/* Numbered steps: circled brand counters (how-to sections). */
+.pd-content ol { margin: .9rem 0; padding-left: .25rem; list-style: none; counter-reset: pd-step; }
+.pd-content ol > li { position: relative; margin: .6rem 0; padding-left: 2.3rem; counter-increment: pd-step; }
+.pd-content ol > li::before {
+    content: counter(pd-step); position: absolute; left: 0; top: .1em;
+    width: 1.6rem; height: 1.6rem; border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .78rem; font-weight: 700; color: var(--brand-dark);
+    background: var(--brand-soft); border: 1.5px solid var(--brand-ring);
+}
+
+.pd-content blockquote {
+    margin: 1.2rem 0; padding: .85rem 1.1rem; border-radius: .75rem;
+    background: var(--brand-soft); border-left: 4px solid var(--brand);
+    color: var(--brand-dark); font-style: italic;
+}
+.pd-content blockquote p { margin: .25rem 0; }
+
+/* Tables — spec sheets AND sibling-comparison grids. Rounded card look,
+   brand header, zebra rows; horizontal scroll on phones (never squished). */
+.pd-content table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 1.3rem 0; font-size: .9rem;
+    border: 1px solid #e2e8f0; border-radius: .9rem; overflow: hidden;
+    box-shadow: 0 1px 2px rgb(0 0 0 / .04);
+}
+.pd-content th {
+    text-align: left; padding: .7rem .9rem; font-weight: 700;
+    color: var(--brand-dark); background: var(--brand-soft);
+    border-bottom: 1px solid #e2e8f0; white-space: nowrap;
+}
+.pd-content td { padding: .68rem .9rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+.pd-content tbody tr:last-child td { border-bottom: 0; }
+.pd-content tbody tr:nth-child(even) td { background: #f8fafc; }
+/* Spec sheets (th in body rows): brand-tint the label column. */
+.pd-content tbody th { border-right: 1px solid #e2e8f0; }
+.pd-content tbody tr td:first-child { font-weight: 600; color: var(--ink); }
+/* Comparison tables (bold product names in cells) breathe more. */
+.pd-content td > strong:first-child { display: inline-block; margin-bottom: .25rem; color: var(--brand-dark); }
+
+@media (max-width: 640px) {
+    .pd-content { line-height: 1.7; }
+    .pd-content h2 { margin-top: 1.9rem; }
+    .pd-content table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .pd-content table td, .pd-content table th { min-width: 9.5rem; }
+}
+
+/* Auto-appended "you may also like" block, if any. */
+.pd-content .pd-related { margin-top: 1.75rem; padding-top: 1.1rem; border-top: 1px solid #e5e7eb; }
+
+/* Cells edited in the admin rich editor carry a <p> wrapper (the editor's
+   schema requires block content inside cells). Neutralize prose paragraph
+   margins there so those tables render identically to unwrapped ones. */
+.prose td p, .prose th p, .pd-content td p, .pd-content th p { margin: 0; }

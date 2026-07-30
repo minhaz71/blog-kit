@@ -1,0 +1,15 @@
+<?php
+
+namespace App\Policies;
+
+use App\Policies\Concerns\ChecksPermission;
+
+class PostCategoryPolicy
+{
+    use ChecksPermission;
+
+    protected function permissions(): array
+    {
+        return ['manage content'];
+    }
+}

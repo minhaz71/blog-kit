@@ -1,0 +1,46 @@
+name: Build assets
+
+# Compiles the Vite frontend bundle on every push to the deploy branch and
+# commits public/build back, so the VPS can update with a plain `git pull`
+# and never needs Node installed. (Alternative: build on the server — the
+# updater does that automatically when npm is present.)
+#
+# For this to commit build output, public/build must be tracked in git —
+# see docs/DEPLOYMENT.md ("Assets: build in CI"). If you instead build on
+# the server, delete this workflow.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-assets.yml'
+      - 'resources/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.js'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+
+      - name: Commit built assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f public/build
+          git diff --cached --quiet || git commit -m "chore: build assets [skip ci]"
+          git push

@@ -1,0 +1,105 @@
+/* ── Staff admin bar ─────────────────────────────────────────────────
+   WordPress-style toolbar shown ONLY to logged-in staff on the live
+   site: quick jumps to edit the page currently being viewed. Never
+   rendered for customers/guests, and logged-in responses are already
+   excluded from the public page cache. */
+
+.adminbar {
+    position: sticky;
+    top: 0;
+    z-index: 60; /* above the sticky shop header (z-40) */
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: #0b1120;
+    color: #cbd5e1;
+    font-size: 0.78rem;
+    line-height: 1;
+    padding: 0 0.75rem;
+    height: 2.35rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.adminbar::-webkit-scrollbar {
+    display: none;
+}
+
+/* The shop header is sticky at top:0 — when the admin bar is present it
+   must stick right below the bar instead of sliding underneath it. */
+.adminbar ~ header {
+    top: 2.35rem;
+}
+
+.adminbar-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-weight: 800;
+    color: #ffffff;
+    text-decoration: none;
+    padding: 0 0.6rem;
+    height: 100%;
+    white-space: nowrap;
+}
+
+.adminbar-brand:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.adminbar-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #14b8a6;
+    box-shadow: 0 0 6px rgba(20, 184, 166, 0.9);
+}
+
+.adminbar-sep {
+    width: 1px;
+    height: 1.1rem;
+    background: rgba(255, 255, 255, 0.14);
+    margin: 0 0.35rem;
+    flex-shrink: 0;
+}
+
+.adminbar-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #cbd5e1;
+    text-decoration: none;
+    padding: 0 0.6rem;
+    height: 100%;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.adminbar-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.adminbar-link.primary {
+    color: #5eead4;
+}
+
+.adminbar-context {
+    color: #64748b;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.62rem;
+    padding: 0 0.5rem;
+    white-space: nowrap;
+}
+
+.adminbar-spacer {
+    flex: 1;
+}
+
+.adminbar-user {
+    color: #64748b;
+    white-space: nowrap;
+    padding-right: 0.5rem;
+}

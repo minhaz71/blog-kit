@@ -1,0 +1,60 @@
+/* ── Shopkit admin polish ───────────────────────────────────────────
+   Loaded on every Filament page (FilamentAsset). Deliberately small:
+   only cross-page refinements the panel theme can't express. All
+   page-specific design stays in each page's scoped <style> block. */
+
+/* Thin, quiet scrollbars for the in-panel scroll areas (activity feeds,
+   item pipelines, media grids) — the default chunky bars read dated. */
+.aibm-items, .aibm-feed, .fi-modal-content, .fi-ta-content {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, .35) transparent;
+}
+.aibm-items::-webkit-scrollbar, .aibm-feed::-webkit-scrollbar {
+    width: 6px;
+}
+.aibm-items::-webkit-scrollbar-thumb, .aibm-feed::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, .35);
+    border-radius: 999px;
+}
+
+/* Custom-page stat cards: subtle lift on hover — reads interactive and
+   modern without decoration. One rule covers every page's card class. */
+.aibm-card, .lga-card, .ilr-card, .ist-card, .psr-card, .spf-card, .sec-card {
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+.aibm-card:hover, .lga-card:hover, .ilr-card:hover, .ist-card:hover,
+.psr-card:hover, .spf-card:hover, .sec-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+}
+.dark .aibm-card:hover, .dark .lga-card:hover, .dark .ilr-card:hover,
+.dark .ist-card:hover, .dark .psr-card:hover, .dark .spf-card:hover,
+.dark .sec-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+}
+
+/* Numbers line up in every stat/table context. */
+.fi-wi-stats-overview-stat-value, .fi-ta-text {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Keep rich-editor formatting controls available while editing long content.
+   Sticky positioning naturally stops at the end of each editor field. */
+.fi-fo-rich-editor-toolbar {
+    position: sticky;
+    top: 4rem;
+    z-index: 20;
+    background: var(--color-white);
+}
+.fi-fo-rich-editor-toolbar:where(.dark, .dark *) {
+    background: var(--gray-900);
+}
+.fi-fo-rich-editor-floating-toolbar {
+    z-index: 30;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .aibm-card, .lga-card, .ilr-card, .ist-card, .psr-card, .spf-card, .sec-card {
+        transition: none;
+    }
+}

@@ -1,0 +1,99 @@
+/* ── Floating WhatsApp button ────────────────────────────────────────
+   Fixed chat button on every storefront page. Reveal + position handled
+   by the .wa-visible class added in wa.js after the configured delay.
+   Official WhatsApp green (#25D366) with a soft glow, per the design. */
+
+.wa-fab {
+    position: fixed;
+    bottom: 1.25rem;
+    z-index: 50;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    height: 3.5rem;
+    padding: 0 1rem 0 0;
+    border-radius: 999px;
+    background: #25d366;
+    color: #ffffff;
+    text-decoration: none;
+    box-shadow: 0 6px 20px -4px rgba(37, 211, 102, 0.65), 0 2px 6px rgba(0, 0, 0, 0.2);
+
+    /* Hidden until wa.js reveals it: fade + slide up from below. */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(1.5rem) scale(0.85);
+    transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.35s;
+}
+
+.wa-fab.wa-left { left: 1.25rem; }
+.wa-fab.wa-right { right: 1.25rem; }
+
+.wa-fab.wa-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+
+/* Icon puck — a circle even when a label is present. */
+.wa-fab-icon {
+    width: 3.5rem;
+    height: 3.5rem;
+    padding: 0.85rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+}
+
+/* Soft pulsing glow ring behind the puck. */
+.wa-fab-glow {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 999px;
+    background: #25d366;
+    z-index: -1;
+    animation: wa-pulse 2.4s ease-out infinite;
+}
+.wa-fab.wa-right .wa-fab-glow { left: auto; right: 0; }
+
+@keyframes wa-pulse {
+    0% { transform: scale(1); opacity: 0.55; }
+    70% { transform: scale(1.6); opacity: 0; }
+    100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Optional hover label — collapsed to icon-only by default; expands on
+   hover for pointer users. */
+.wa-fab-label {
+    max-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    font-weight: 600;
+    font-size: 0.9rem;
+    opacity: 0;
+    transition: max-width 0.3s ease, opacity 0.2s ease;
+}
+.wa-fab:hover .wa-fab-label,
+.wa-fab:focus-visible .wa-fab-label {
+    max-width: 12rem;
+    opacity: 1;
+}
+/* No label → keep the button a perfect circle. */
+.wa-fab:not(:has(.wa-fab-label)) { padding: 0; }
+
+.wa-fab:hover {
+    box-shadow: 0 10px 28px -4px rgba(37, 211, 102, 0.75), 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+.wa-fab:active { transform: translateY(0) scale(0.94); }
+
+/* Keep clear of the mobile sticky add-to-cart bar on product pages. */
+@media (max-width: 1023px) {
+    .wa-fab { bottom: 5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wa-fab { transition: opacity 0.2s ease; transform: none; }
+    .wa-fab.wa-visible { transform: none; }
+    .wa-fab-glow { animation: none; }
+}
