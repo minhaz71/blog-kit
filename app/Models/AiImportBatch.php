@@ -13,6 +13,7 @@ class AiImportBatch extends Model
         return [
             'allowed_tags' => 'array',
             'link_catalog' => 'array',
+            'network_site_ids' => 'array',
         ];
     }
 

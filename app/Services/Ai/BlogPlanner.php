@@ -130,6 +130,9 @@ class BlogPlanner
             // datetime in the date column) publishes at that exact time.
             'publish_date' => 'publish_date', 'publish_at' => 'publish_date', 'date' => 'publish_date',
             'publish_time' => 'publish_time', 'time' => 'publish_time',
+            // Multisite: which connected sites this article also publishes to
+            // ("2,5,34" or "all"). Overrides the batch-level default per row.
+            'site_ids' => 'site_ids', 'sites' => 'site_ids', 'site_id' => 'site_ids', 'target_sites' => 'site_ids',
         ];
 
         $handle = fopen($path, 'r');

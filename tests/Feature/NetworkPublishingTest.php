@@ -88,6 +88,39 @@ class NetworkPublishingTest extends TestCase
         $this->assertSame(1, Post::whereNotNull('network_origin')->count());
     }
 
+    public function test_resolve_targets_handles_all_list_and_inactive(): void
+    {
+        $a = ConnectedSite::create(['name' => 'A', 'base_url' => 'https://a.example', 'api_key' => 'k1', 'api_secret' => 's1', 'is_active' => true]);
+        $b = ConnectedSite::create(['name' => 'B', 'base_url' => 'https://b.example', 'api_key' => 'k2', 'api_secret' => 's2', 'is_active' => true]);
+        $c = ConnectedSite::create(['name' => 'C', 'base_url' => 'https://c.example', 'api_key' => 'k3', 'api_secret' => 's3', 'is_active' => false]);
+
+        $resolve = fn ($v) => \App\Services\Network\NetworkPublisher::resolveTargets($v);
+
+        $this->assertEqualsCanonicalizing([$a->id, $b->id], $resolve('all'));           // inactive C excluded
+        $this->assertEqualsCanonicalizing([$a->id, $b->id], $resolve("{$a->id}, {$b->id}"));
+        $this->assertSame([$a->id], $resolve((string) $a->id));
+        $this->assertSame([], $resolve((string) $c->id));                                // inactive → dropped
+        $this->assertSame([], $resolve(null));
+        $this->assertSame([], $resolve(''));
+    }
+
+    public function test_csv_site_ids_column_is_parsed_via_aliases(): void
+    {
+        $author = User::create(['name' => 'A', 'email' => 'a@example.com', 'password' => bcrypt('x'), 'is_active' => true]);
+        $csv = "title,keywords,sites\nMy Post,alpha,\"2,5,34\"\n";
+        \Illuminate\Support\Facades\Storage::disk('local')->put('ai-imports/sites.csv', $csv);
+
+        $batch = \App\Models\AiImportBatch::create([
+            'name' => 'B', 'kind' => 'blog', 'csv_path' => 'ai-imports/sites.csv',
+            'prompt' => 'brief', 'provider' => 'anthropic', 'user_id' => $author->id,
+        ]);
+
+        (new \App\Services\Ai\BlogPlanner)->plan($batch);
+
+        $row = $batch->items()->first()->row;
+        $this->assertSame('2,5,34', $row['site_ids']); // "sites" aliased to site_ids
+    }
+
     public function test_hub_push_records_a_synced_link(): void
     {
         Http::fake([

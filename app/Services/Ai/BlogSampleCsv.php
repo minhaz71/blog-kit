@@ -18,6 +18,8 @@ namespace App\Services\Ai;
  *  - outline       optional section hints (the writer expands them)
  *  - tone          e.g. friendly-expert, formal, conversational
  *  - target_words  explicit length target (overrides the role default)
+ *  - site_ids      multisite only: connected-site IDs to also publish this
+ *                  article to, e.g. "2,5,34" or "all" (blank = only this site)
  *  - details       any facts the writer must stay grounded in
  *  - scheduling: publish_date only → 00:00 that day; + publish_time → exact
  *    minute; both empty → batch settings decide.
@@ -29,7 +31,7 @@ class BlogSampleCsv
     public static function content(): string
     {
         $rows = [
-            ['title', 'keywords', 'search_intent', 'entities', 'audience', 'angle', 'tone', 'target_words', 'details', 'publish_date', 'publish_time'],
+            ['title', 'keywords', 'search_intent', 'entities', 'audience', 'angle', 'tone', 'target_words', 'site_ids', 'details', 'publish_date', 'publish_time'],
             [
                 'How to Start Composting in a Small Apartment',
                 'apartment composting, indoor composting for beginners, bokashi vs worm bin',
@@ -38,6 +40,7 @@ class BlogSampleCsv
                 'City renters with no garden and limited space',
                 'A realistic, smell-free method that actually works in a studio, with the mistakes most guides skip.',
                 'friendly-expert', '1400',
+                '',
                 'Cover bokashi vs worm bin trade-offs, what not to add, and what to do with the finished compost with no garden.',
                 '2026-08-01', '',
             ],
@@ -49,6 +52,7 @@ class BlogSampleCsv
                 'First-time investors deciding where to start',
                 'A plain-English decision guide with a clear "who should pick which", not a jargon dump.',
                 'clear, neutral, non-promotional', '1600',
+                '2,5',
                 'YMYL topic: explain concepts, do not give personalized advice; tell readers to consider a licensed advisor.',
                 '2026-08-03', '09:30',
             ],
@@ -60,6 +64,7 @@ class BlogSampleCsv
                 'Absolute beginners and people returning to exercise',
                 'Honest about when it helps and when to progress, with a simple 4-week progression.',
                 'encouraging, expert', '1100',
+                'all',
                 'YMYL-adjacent: general fitness info only, advise consulting a professional for injuries.',
                 '', '',
             ],

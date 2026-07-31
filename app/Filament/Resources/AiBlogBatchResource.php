@@ -194,6 +194,17 @@ class AiBlogBatchResource extends Resource
                         ->inline(false)
                         ->helperText('On: an article the reviewer never approves is saved as a DRAFT post labeled "needs review" (never lost — publish it from Content → Posts or via Approve & publish on the item). Off: publish the best version after the last cycle.'),
                 ]),
+            Section::make('Multisite publishing')
+                ->description('Also publish each written article to these connected sites. A per-row "site_ids" column in the CSV (e.g. "2,5,34" or "all") overrides this default for that article.')
+                ->visible(fn (): bool => is_network_hub() && \App\Models\ConnectedSite::query()->active()->exists())
+                ->schema([
+                    Select::make('network_site_ids')
+                        ->label('Publish to connected sites')
+                        ->multiple()
+                        ->options(fn () => \App\Models\ConnectedSite::query()->active()->orderBy('id')->pluck('name', 'id'))
+                        ->placeholder('Only this site')
+                        ->helperText('Leave empty to publish only here. Each written, non-held article is pushed to the selected sites in the background.'),
+                ]),
         ]);
     }
 

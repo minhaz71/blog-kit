@@ -106,6 +106,8 @@ class WriteAiBlogPost implements ShouldQueue
             AiActivityLog::write($batch->id, $item->id, 'publish',
                 ($batch->publish_mode === 'publish' ? '🚀 Published' : 'Saved as draft').": \"{$post->title}\" → ".route('blog.show', $post->slug),
                 'success');
+
+            $this->fanOutToNetwork($item, $post, $batch);
         } catch (\Throwable $e) {
             $this->markFailed($item, $e->getMessage());
         }
@@ -123,6 +125,34 @@ class WriteAiBlogPost implements ShouldQueue
 
         $this->markFailed($item, 'Job was killed (timeout or fatal error): '.($e?->getMessage() ?? 'unknown'));
         $this->maybeFinalize($item->batch);
+    }
+
+    /**
+     * Multisite fan-out: after a real (non-held) publish, also push the
+     * article to the connected sites chosen for this article. Per-row
+     * `site_ids` (CSV) overrides the batch-level default; "all" targets every
+     * active site. Only runs on a hub with the network module on. Failures
+     * here never affect the local publish (already done above).
+     */
+    protected function fanOutToNetwork(AiImportItem $item, \App\Models\Post $post, \App\Models\AiImportBatch $batch): void
+    {
+        if (! network_enabled() || ! is_network_hub()) {
+            return;
+        }
+
+        $value = $item->row['site_ids'] ?? ($batch->network_site_ids ?: null);
+        $siteIds = \App\Services\Network\NetworkPublisher::resolveTargets($value);
+
+        if ($siteIds === []) {
+            return;
+        }
+
+        $result = (new \App\Services\Network\NetworkPublisher)->publish($post, $siteIds);
+
+        AiActivityLog::write($batch->id, $item->id, 'publish',
+            "🌐 Queued \"{$post->title}\" to {$result['queued']} connected site(s)"
+            .($result['skipped'] !== [] ? ' ('.count($result['skipped']).' inactive skipped)' : '').'.',
+            'success');
     }
 
     protected function markFailed(AiImportItem $item, string $message): void
