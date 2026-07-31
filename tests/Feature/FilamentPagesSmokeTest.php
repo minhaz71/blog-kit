@@ -91,6 +91,7 @@ class FilamentPagesSmokeTest extends TestCase
         '/admin/connected-sites',
         '/admin/connected-sites/create',
         '/admin/network-posts',
+        '/admin/network-syncs',
         '/admin/network-settings',
     ];
 

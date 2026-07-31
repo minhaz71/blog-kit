@@ -17,6 +17,7 @@ class NetworkPostLink extends Model
     {
         return [
             'last_pushed_at' => 'datetime',
+            'conflict_detected_at' => 'datetime',
         ];
     }
 

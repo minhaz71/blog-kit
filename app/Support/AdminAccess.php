@@ -88,6 +88,7 @@ class AdminAccess
         // in each screen's canAccess(); the permission still governs staff access.
         \App\Filament\Resources\ConnectedSiteResource::class => ['access_connected_sites', 'Connected sites', 'Network'],
         \App\Filament\Resources\NetworkPostResource::class => ['access_network_posts', "All sites' posts", 'Network'],
+        \App\Filament\Resources\NetworkSyncResource::class => ['access_network_sync', 'Sync status', 'Network'],
         \App\Filament\Pages\NetworkSettings::class => ['access_network_settings', 'Network settings', 'Network'],
 
         // Security

@@ -17,5 +17,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/posts', [\App\Http\Controllers\Api\NetworkController::class, 'storePost']);
         // Phase 4: list this site's posts for a hub to mirror.
         Route::get('/posts', [\App\Http\Controllers\Api\NetworkController::class, 'listPosts']);
+        // Phase 5: delete a post this hub manages ({id} = the hub's network_post_id).
+        Route::delete('/posts/{id}', [\App\Http\Controllers\Api\NetworkController::class, 'deletePost'])
+            ->where('id', '[0-9]+');
     });
 });

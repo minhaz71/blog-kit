@@ -129,6 +129,8 @@ class PostResource extends Resource
                 ),
                 \Filament\Actions\EditAction::make(),
                 self::publishToSitesAction(),
+                self::syncToNetworkAction(),
+                self::removeFromNetworkAction(),
                 \Filament\Actions\Action::make('revisions')
                     ->label('Revisions')
                     ->icon(\Filament\Support\Icons\Heroicon::OutlinedClock)
@@ -194,6 +196,46 @@ class PostResource extends Resource
                     ->body($result['skipped'] !== [] ? count($result['skipped']).' inactive site(s) skipped.' : 'Publishing in the background.')
                     ->success()
                     ->send();
+            });
+    }
+
+    /** Whether this post already has network links (so sync/remove make sense). */
+    protected static function hasNetworkLinks(Post $post): bool
+    {
+        return is_network_hub() && \App\Models\NetworkPostLink::where('post_id', $post->id)->exists();
+    }
+
+    /** Re-push the current hub version to every linked site. */
+    public static function syncToNetworkAction(): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make('syncToNetwork')
+            ->label('Sync to network')
+            ->icon(\Filament\Support\Icons\Heroicon::OutlinedArrowPath)
+            ->color('gray')
+            ->visible(fn (Post $record): bool => self::hasNetworkLinks($record))
+            ->requiresConfirmation()
+            ->modalDescription('Re-push this post to every site it was published to, overwriting the remote copy with the current version.')
+            ->action(function (Post $record): void {
+                $n = (new \App\Services\Network\NetworkSyncService)->resync($record);
+                \Filament\Notifications\Notification::make()
+                    ->title("Re-syncing to {$n} site(s)")->success()->send();
+            });
+    }
+
+    /** Delete this post's copy from every linked site (hub post stays). */
+    public static function removeFromNetworkAction(): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make('removeFromNetwork')
+            ->label('Remove from network')
+            ->icon(\Filament\Support\Icons\Heroicon::OutlinedGlobeAlt)
+            ->color('danger')
+            ->visible(fn (Post $record): bool => self::hasNetworkLinks($record))
+            ->requiresConfirmation()
+            ->modalDescription('Delete this post from every connected site it was published to. The copy here on the hub is NOT deleted.')
+            ->action(function (Post $record): void {
+                $n = (new \App\Services\Network\NetworkSyncService)->removeFromNetwork($record);
+                \Filament\Notifications\Notification::make()
+                    ->title("Removing from {$n} site(s)")->success()->send();
             });
     }
 

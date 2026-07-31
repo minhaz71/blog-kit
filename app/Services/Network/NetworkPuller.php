@@ -3,7 +3,10 @@
 namespace App\Services\Network;
 
 use App\Models\ConnectedSite;
+use App\Models\NetworkPostLink;
 use App\Models\NetworkRemotePost;
+use App\Models\Post;
+use App\Services\Network\NetworkPostPayload;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -48,9 +51,15 @@ class NetworkPuller
                             'category_name' => $row['category'] ?? null,
                             'author_name' => $row['author'] ?? null,
                             'excerpt' => $row['excerpt'] ?? null,
+                            'content_hash' => $row['content_hash'] ?? null,
                             'pulled_at' => now(),
                         ],
                     );
+
+                    // Two-way: if this hub pushed this post, flag a conflict
+                    // when the spoke's current content diverges from what the
+                    // hub last pushed.
+                    $this->reconcileLink($site, (int) $row['remote_post_id'], (string) ($row['content_hash'] ?? ''));
 
                     $seen[] = (int) $row['remote_post_id'];
                     $count++;
@@ -72,6 +81,43 @@ class NetworkPuller
             $site->forceFill(['status' => 'error', 'last_error' => Str::limit($e->getMessage(), 480)])->save();
 
             return [false, $e->getMessage(), $count];
+        }
+    }
+
+    /**
+     * Update the push-link's sync status from a fresh pull:
+     *  - remote == current hub payload → synced;
+     *  - remote unchanged since our push but hub differs → pending (hub ahead,
+     *    needs a re-push);
+     *  - remote changed since our push → conflict (edited on the spoke).
+     */
+    protected function reconcileLink(ConnectedSite $site, int $remotePostId, string $remoteHash): void
+    {
+        $link = NetworkPostLink::where('site_id', $site->id)->where('remote_post_id', $remotePostId)->first();
+
+        if (! $link || ! $link->post_id || $remoteHash === '') {
+            return;
+        }
+
+        $hubPost = Post::find($link->post_id);
+        if (! $hubPost) {
+            return;
+        }
+
+        $currentHubHash = NetworkPostPayload::hash(NetworkPostPayload::for($hubPost));
+
+        if ($remoteHash === $currentHubHash) {
+            $link->update(['status' => 'synced', 'remote_hash' => $remoteHash, 'conflict_detected_at' => null]);
+        } elseif ($remoteHash === $link->content_hash) {
+            // Spoke untouched since our push, but the hub post changed → we owe a push.
+            $link->update(['status' => 'pending', 'remote_hash' => $remoteHash, 'conflict_detected_at' => null]);
+        } else {
+            // Spoke diverged from what we pushed → conflict.
+            $link->update([
+                'status' => 'conflict',
+                'remote_hash' => $remoteHash,
+                'conflict_detected_at' => $link->conflict_detected_at ?? now(),
+            ]);
         }
     }
 

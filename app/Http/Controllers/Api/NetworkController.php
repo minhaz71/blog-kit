@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Post;
 use App\Services\Network\NetworkPostIngestor;
+use App\Services\Network\NetworkPostPayload;
 use App\Support\Version;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -46,8 +47,8 @@ class NetworkController extends Controller
                 'handshake' => true,
                 'posts.push' => true,
                 'posts.pull' => true,
-                'posts.update' => false,
-                'posts.delete' => false,
+                'posts.update' => true,
+                'posts.delete' => true,
                 'taxonomies.sync' => false,
                 'media.sync' => false,
                 'authors.sync' => false,
@@ -120,10 +121,34 @@ class NetworkController extends Controller
                 'category' => $p->category?->name,
                 'author' => $p->author?->name,
                 'excerpt' => Str::limit(strip_tags((string) $p->excerpt), 200),
+                // Lets a hub detect a spoke-side edit (divergence from what it
+                // last pushed) — computed the same way as the hub's push hash.
+                'content_hash' => NetworkPostPayload::hash(NetworkPostPayload::for($p)),
             ])->all(),
             'current_page' => $page->currentPage(),
             'last_page' => $page->lastPage(),
             'total' => $page->total(),
         ]);
+    }
+
+    /**
+     * Delete a network-managed post pushed by the calling hub. Scoped to this
+     * hub's own origin namespace so one hub can never delete another hub's (or
+     * a locally authored) post. Idempotent: already-gone returns ok.
+     */
+    public function deletePost(Request $request, int $id): JsonResponse
+    {
+        $hubKey = (string) $request->header(\App\Services\Network\NetworkSignature::HEADER_KEY, 'hub');
+        $origin = $hubKey.':'.$id;
+
+        $post = Post::where('network_origin', $origin)->first();
+
+        if (! $post) {
+            return response()->json(['ok' => true, 'deleted' => false, 'reason' => 'not found (already deleted or not managed by this hub)']);
+        }
+
+        $post->delete(); // soft delete (Post uses SoftDeletes)
+
+        return response()->json(['ok' => true, 'deleted' => true]);
     }
 }
