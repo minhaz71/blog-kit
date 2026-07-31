@@ -49,9 +49,9 @@ class NetworkController extends Controller
                 'posts.pull' => true,
                 'posts.update' => true,
                 'posts.delete' => true,
-                'taxonomies.sync' => false,
-                'media.sync' => false,
-                'authors.sync' => false,
+                'taxonomies.sync' => true,
+                'media.sync' => true,
+                'authors.sync' => true,
             ],
         ]);
     }

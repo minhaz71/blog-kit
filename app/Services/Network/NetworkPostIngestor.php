@@ -9,6 +9,8 @@ use App\Models\User;
 use App\Services\Ai\BlogPublisher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -43,6 +45,7 @@ class NetworkPostIngestor
                 'status' => $status,
                 'published_at' => $publishedAt,
                 'featured_image_alt' => trim((string) ($data['featured_image_alt'] ?? '')) ?: null,
+                'featured_image' => $this->resolveImage($data, $post?->featured_image),
                 'network_origin' => $origin,
             ];
 
@@ -103,17 +106,71 @@ class NetworkPostIngestor
         )->id;
     }
 
-    /** Map author by email to a local user; fall back to the lowest-id user. */
+    /**
+     * Map author by email to a local user. When none exists, create an
+     * ATTRIBUTION-ONLY user (is_active=false, unusable random password, no
+     * roles) carrying the E-E-A-T profile (name, job title, bio, social links)
+     * so the author box + Person schema render on the spoke without granting
+     * any login/admin access. Falls back to the lowest-id user when the
+     * payload has no author email.
+     */
     protected function resolveAuthor(?array $author): ?int
     {
         if ($author && ! empty($author['email'])) {
-            $user = User::where('email', $author['email'])->first();
-            if ($user) {
-                return $user->id;
+            $existing = User::where('email', $author['email'])->first();
+            if ($existing) {
+                return $existing->id; // never overwrite a real local user's profile
             }
+
+            return User::create([
+                'name' => (string) ($author['name'] ?: 'Author'),
+                'email' => (string) $author['email'],
+                'password' => Hash::make(Str::random(40)),
+                'is_active' => false, // attribution only — cannot log in
+                'job_title' => $author['job_title'] ?? null,
+                'bio' => $author['bio'] ?? null,
+                'social_links' => ! empty($author['social_links']) ? (array) $author['social_links'] : null,
+            ])->id;
         }
 
         return User::query()->orderBy('id')->value('id');
+    }
+
+    /**
+     * Decide the local featured_image path from the payload:
+     *  - hub has no image  → null (clear it);
+     *  - image shipped     → decode, validate it IS an image, store on the
+     *    public disk under a content-addressed path (idempotent), return it;
+     *  - present but not shipped (too large / decode fails) → keep $current.
+     */
+    protected function resolveImage(array $data, ?string $current): ?string
+    {
+        if (! ($data['has_featured_image'] ?? false)) {
+            return null;
+        }
+
+        $img = $data['featured_image'] ?? null;
+        if (! is_array($img) || empty($img['data'])) {
+            return $current; // too large to inline / not sent — leave existing
+        }
+
+        $bytes = base64_decode((string) $img['data'], true);
+        if ($bytes === false || $bytes === '') {
+            return $current;
+        }
+
+        $info = @getimagesizefromstring($bytes);
+        if ($info === false) {
+            return $current; // not a real image — never write arbitrary bytes
+        }
+
+        $sha = (string) ($img['sha256'] ?? hash('sha256', $bytes));
+        $ext = image_type_to_extension($info[2], false) ?: 'img';
+        $relative = 'network/'.$sha.'.'.$ext; // content-addressed → re-push reuses the same file
+
+        Storage::disk('public')->put($relative, $bytes);
+
+        return $relative;
     }
 
     /** [status, published_at]. Future published_at with published status becomes scheduled. */
