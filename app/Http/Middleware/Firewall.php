@@ -68,6 +68,15 @@ class Firewall
             abort(403, 'Access denied.');
         }
 
+        // Multisite network API: authenticated by HMAC (VerifyNetworkSignature)
+        // and called by trusted sister sites. Exempt it from the heuristic
+        // blocks below (threat-intel, country, empty-UA, scanner paths,
+        // payload scan) so sites never false-positive-block each other. The
+        // explicit IP-ban list above still applies.
+        if (network_enabled() && $request->is('api/v1/network', 'api/v1/network/*')) {
+            return $next($request);
+        }
+
         // 1b. Real-time threat-intelligence blocklist (known threat actors).
         if (setting('security.threat_intel_enabled', true) && \App\Models\ThreatIntelIp::contains($ip)) {
             $this->log($request, 'threat_intel_ip');

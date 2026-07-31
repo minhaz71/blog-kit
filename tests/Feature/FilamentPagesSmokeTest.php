@@ -87,6 +87,10 @@ class FilamentPagesSmokeTest extends TestCase
         '/admin/abandoned-carts',
         '/admin/abandoned-cart-settings',
         '/admin/find-replace',
+        // Network (multisite) — hub-only screens (test env sets role=hub).
+        '/admin/connected-sites',
+        '/admin/connected-sites/create',
+        '/admin/network-settings',
     ];
 
     public function test_every_admin_page_renders_without_error(): void

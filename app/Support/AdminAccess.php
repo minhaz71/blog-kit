@@ -16,7 +16,7 @@ namespace App\Support;
 class AdminAccess
 {
     /** Nav-group display order for the role matrix. */
-    public const GROUP_ORDER = ['Catalog', 'Sales', 'Customers', 'Marketing', 'Content', 'SEO', 'Security', 'System'];
+    public const GROUP_ORDER = ['Catalog', 'Sales', 'Customers', 'Marketing', 'Content', 'SEO', 'Network', 'Security', 'System'];
 
     /** class => [permission key, human label, nav group]. */
     public const SCREENS = [
@@ -83,6 +83,11 @@ class AdminAccess
         \App\Filament\Pages\ImageSeoTools::class => ['access_image_seo', 'Image SEO tools', 'SEO'],
         \App\Filament\Pages\PageSpeedReport::class => ['access_pagespeed', 'PageSpeed report', 'SEO'],
         \App\Filament\Pages\SearchPerformance::class => ['access_search_performance', 'Search performance', 'SEO'],
+
+        // Network (multisite) — additionally gated by the network module + role
+        // in each screen's canAccess(); the permission still governs staff access.
+        \App\Filament\Resources\ConnectedSiteResource::class => ['access_connected_sites', 'Connected sites', 'Network'],
+        \App\Filament\Pages\NetworkSettings::class => ['access_network_settings', 'Network settings', 'Network'],
 
         // Security
         \App\Filament\Pages\SecurityCenter::class => ['access_security_center', 'Security center', 'Security'],

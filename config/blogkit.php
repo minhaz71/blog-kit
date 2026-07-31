@@ -33,6 +33,27 @@ return [
 
     'modules' => [
         'ecommerce' => env('BLOGKIT_ECOMMERCE_ENABLED', false),
+
+        // Multisite network (hub-and-spoke). When on, this install can act as
+        // a control hub (manage + publish to other installs) and/or a spoke
+        // (accept signed content from a hub). Off = a plain standalone blog.
+        'network' => env('BLOGKIT_NETWORK_ENABLED', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Multisite network
+    |--------------------------------------------------------------------------
+    |
+    | Role default when the setting is unsaved: standalone | hub | spoke.
+    | Signed-request tolerances for the HMAC network API (seconds).
+    |
+    */
+
+    'network' => [
+        'role' => env('BLOGKIT_NETWORK_ROLE', 'standalone'),
+        'timestamp_tolerance' => (int) env('BLOGKIT_NETWORK_TS_TOLERANCE', 300),
+        'nonce_ttl' => (int) env('BLOGKIT_NETWORK_NONCE_TTL', 600),
     ],
 
     /*

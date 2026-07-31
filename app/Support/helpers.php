@@ -77,6 +77,46 @@ if (! function_exists('ecommerce_enabled')) {
     }
 }
 
+if (! function_exists('network_enabled')) {
+    /** Is the multisite network module active? */
+    function network_enabled(): bool
+    {
+        return module_enabled('network');
+    }
+}
+
+if (! function_exists('network_role')) {
+    /**
+     * This install's network role: 'standalone' | 'hub' | 'spoke'. Reads the
+     * saved setting, falling back to config/blogkit.php ('network.role').
+     * Always 'standalone' when the network module is off.
+     */
+    function network_role(): string
+    {
+        if (! network_enabled()) {
+            return 'standalone';
+        }
+
+        try {
+            $role = setting('network.role', null);
+        } catch (\Throwable) {
+            $role = null;
+        }
+
+        $role ??= config('blogkit.network.role', 'standalone');
+
+        return in_array($role, ['hub', 'spoke'], true) ? $role : 'standalone';
+    }
+}
+
+if (! function_exists('is_network_hub')) {
+    /** True when this install acts as the network control hub. */
+    function is_network_hub(): bool
+    {
+        return network_role() === 'hub';
+    }
+}
+
 if (! function_exists('pb_block_style')) {
     /**
      * Inline CSS for a product-template block from its style settings

@@ -5,4 +5,13 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     // Populated with product/category/cart/order endpoints (task: API system).
     Route::get('/ping', fn () => response()->json(['ok' => true, 'time' => now()->toIso8601String()]));
+
+    // ── Multisite network API (spoke side) ─────────────────────────────
+    // Every call is HMAC-verified by the `network.signed` middleware. These
+    // routes stay registered even when the module is off (the middleware
+    // returns 404 then), so URL generation never breaks.
+    Route::prefix('network')->middleware('network.signed')->group(function () {
+        Route::get('/ping', [\App\Http\Controllers\Api\NetworkController::class, 'ping']);
+        Route::get('/capabilities', [\App\Http\Controllers\Api\NetworkController::class, 'capabilities']);
+    });
 });

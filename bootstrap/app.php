@@ -59,6 +59,8 @@ return Application::configure(basePath: dirname(__DIR__))
             '2fa' => EnforceTwoFactor::class,
             // 404s storefront ecommerce routes when the store module is off.
             'ecommerce' => \App\Http\Middleware\EnsureEcommerceEnabled::class,
+            // HMAC-verifies inbound multisite-network API calls.
+            'network.signed' => \App\Http\Middleware\VerifyNetworkSignature::class,
         ]);
 
         $middleware->api(prepend: [

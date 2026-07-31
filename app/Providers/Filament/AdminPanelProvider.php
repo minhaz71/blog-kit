@@ -51,6 +51,7 @@ class AdminPanelProvider extends PanelProvider
                 \Filament\Navigation\NavigationGroup::make('Marketing')->icon('heroicon-o-megaphone'),
                 \Filament\Navigation\NavigationGroup::make('Content')->icon('heroicon-o-document-text'),
                 \Filament\Navigation\NavigationGroup::make('SEO')->icon('heroicon-o-chart-bar-square'),
+                \Filament\Navigation\NavigationGroup::make('Network')->icon('heroicon-o-globe-alt'),
                 \Filament\Navigation\NavigationGroup::make('Security')->icon('heroicon-o-shield-check'),
                 \Filament\Navigation\NavigationGroup::make('System')->icon('heroicon-o-cog-6-tooth'),
             ])

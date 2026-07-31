@@ -54,16 +54,21 @@ class ModuleSettings extends Page
     /** Concrete keys for this settings page. */
     protected function keys(): array
     {
-        return ['ecommerce_enabled'];
+        return ['ecommerce_enabled', 'network_enabled'];
     }
 
     public function mount(): void
     {
+        // Per-module effective default (config/.env fallback) so each toggle
+        // reflects the real state even before it has ever been saved.
+        $defaults = [
+            'ecommerce_enabled' => ecommerce_enabled(),
+            'network_enabled' => network_enabled(),
+        ];
+
         $data = [];
         foreach ($this->keys() as $key) {
-            // Fall back to the config/.env default so the toggle reflects the
-            // real, effective state even before it has ever been saved.
-            $data[$key] = Setting::get("modules.{$key}", ecommerce_enabled());
+            $data[$key] = Setting::get("modules.{$key}", $defaults[$key] ?? false);
         }
         $this->form->fill($data);
     }
@@ -78,6 +83,13 @@ class ModuleSettings extends Page
                         Toggle::make('ecommerce_enabled')
                             ->label('Enable ecommerce store')
                             ->helperText('Leave off for a pure blog site. Enable to run a full store alongside (or instead of) the blog.'),
+                    ]),
+                Section::make('Multisite network')
+                    ->description('Connect several Hemdox Blog Kit installs into one network so a single dashboard can publish to, and view posts from, all of them. After enabling, set this site\'s role (Hub or Spoke) under Network → Network settings.')
+                    ->schema([
+                        Toggle::make('network_enabled')
+                            ->label('Enable multisite network')
+                            ->helperText('Off = a normal standalone site. On = this install can act as a hub and/or a spoke.'),
                     ]),
             ])
             ->statePath('data');

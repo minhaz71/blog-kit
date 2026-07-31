@@ -25,6 +25,10 @@
              product schema, funnel). Run tests with the ecommerce module ON so
              those paths register; blog-only mode is the runtime default. -->
         <env name="BLOGKIT_ECOMMERCE_ENABLED" value="true"/>
+        <!-- Network module on + hub role so the multisite screens/API are
+             exercised by the suite. -->
+        <env name="BLOGKIT_NETWORK_ENABLED" value="true"/>
+        <env name="BLOGKIT_NETWORK_ROLE" value="hub"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
