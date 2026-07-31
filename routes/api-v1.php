@@ -15,5 +15,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/capabilities', [\App\Http\Controllers\Api\NetworkController::class, 'capabilities']);
         // Phase 2: accept a post pushed from a hub (idempotent upsert).
         Route::post('/posts', [\App\Http\Controllers\Api\NetworkController::class, 'storePost']);
+        // Phase 4: list this site's posts for a hub to mirror.
+        Route::get('/posts', [\App\Http\Controllers\Api\NetworkController::class, 'listPosts']);
     });
 });

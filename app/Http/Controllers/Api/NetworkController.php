@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Post;
 use App\Services\Network\NetworkPostIngestor;
 use App\Support\Version;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * Spoke-side network API (this install answering a hub). All routes here run
@@ -42,7 +45,7 @@ class NetworkController extends Controller
             'capabilities' => [
                 'handshake' => true,
                 'posts.push' => true,
-                'posts.pull' => false,
+                'posts.pull' => true,
                 'posts.update' => false,
                 'posts.delete' => false,
                 'taxonomies.sync' => false,
@@ -80,6 +83,47 @@ class NetworkController extends Controller
             'slug' => $post->slug,
             'url' => $post->url(),
             'status' => $post->status,
+        ]);
+    }
+
+    /**
+     * Paginated list of this site's posts for a hub to mirror and browse.
+     * `?since=<iso8601>` returns only posts updated after that time
+     * (incremental pulls); `?page` + `?per_page` paginate.
+     */
+    public function listPosts(Request $request): JsonResponse
+    {
+        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
+
+        $query = Post::query()->with(['category', 'author'])->orderByDesc('updated_at');
+
+        if ($since = $request->query('since')) {
+            try {
+                $query->where('updated_at', '>', Carbon::parse((string) $since));
+            } catch (\Throwable) {
+                // ignore an unparseable cursor — fall back to a full page
+            }
+        }
+
+        $page = $query->paginate($perPage);
+
+        return response()->json([
+            'ok' => true,
+            'data' => collect($page->items())->map(fn (Post $p) => [
+                'remote_post_id' => $p->id,
+                'title' => (string) $p->title,
+                'slug' => (string) $p->slug,
+                'url' => $p->url(),
+                'status' => (string) $p->status,
+                'published_at' => $p->published_at?->toIso8601String(),
+                'updated_at' => $p->updated_at?->toIso8601String(),
+                'category' => $p->category?->name,
+                'author' => $p->author?->name,
+                'excerpt' => Str::limit(strip_tags((string) $p->excerpt), 200),
+            ])->all(),
+            'current_page' => $page->currentPage(),
+            'last_page' => $page->lastPage(),
+            'total' => $page->total(),
         ]);
     }
 }

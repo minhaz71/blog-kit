@@ -90,6 +90,7 @@ class FilamentPagesSmokeTest extends TestCase
         // Network (multisite) — hub-only screens (test env sets role=hub).
         '/admin/connected-sites',
         '/admin/connected-sites/create',
+        '/admin/network-posts',
         '/admin/network-settings',
     ];
 

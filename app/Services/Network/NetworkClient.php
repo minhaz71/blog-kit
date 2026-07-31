@@ -33,11 +33,13 @@ class NetworkClient
      *
      * @throws \RuntimeException on transport failure or non-2xx response
      */
-    public function request(ConnectedSite $site, string $method, string $path, array $body = []): array
+    public function request(ConnectedSite $site, string $method, string $path, array $body = [], array $query = []): array
     {
         $fullPath = 'api/v1/network/'.ltrim($path, '/');
         $payload = $body === [] ? '' : json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
+        // The signature covers the path + body (not the query string); the
+        // spoke verifies against $request->path(), which excludes the query.
         $headers = NetworkSignature::headers(
             key: (string) $site->api_key,
             secret: (string) $site->api_secret,
@@ -54,7 +56,7 @@ class NetworkClient
                 ->acceptJson();
 
             $response = ($method === 'GET')
-                ? $request->get($site->apiUrl($path))
+                ? $request->get($site->apiUrl($path), $query)
                 : $request->withBody($payload, 'application/json')->send($method, $site->apiUrl($path));
         } catch (\Throwable $e) {
             throw new \RuntimeException('Could not reach '.$site->baseUrl().': '.$e->getMessage(), previous: $e);
