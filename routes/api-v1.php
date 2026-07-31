@@ -13,5 +13,7 @@ Route::prefix('v1')->group(function () {
     Route::prefix('network')->middleware('network.signed')->group(function () {
         Route::get('/ping', [\App\Http\Controllers\Api\NetworkController::class, 'ping']);
         Route::get('/capabilities', [\App\Http\Controllers\Api\NetworkController::class, 'capabilities']);
+        // Phase 2: accept a post pushed from a hub (idempotent upsert).
+        Route::post('/posts', [\App\Http\Controllers\Api\NetworkController::class, 'storePost']);
     });
 });

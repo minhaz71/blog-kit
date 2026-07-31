@@ -128,6 +128,7 @@ class PostResource extends Resource
                     fn (Post $record): bool => $record->status === 'published' && $record->published_at?->isPast(),
                 ),
                 \Filament\Actions\EditAction::make(),
+                self::publishToSitesAction(),
                 \Filament\Actions\Action::make('revisions')
                     ->label('Revisions')
                     ->icon(\Filament\Support\Icons\Heroicon::OutlinedClock)
@@ -140,6 +141,7 @@ class PostResource extends Resource
             ])
             ->toolbarActions([
                 \Filament\Actions\BulkActionGroup::make([
+                    self::publishToSitesBulkAction(),
                     ResourceActions::refreshWithAi('blog'),
                     ...ResourceActions::statusBulks(),
                     // coalescePurge: delete the whole batch, then clear cache once.
@@ -155,6 +157,66 @@ class PostResource extends Resource
     {
         return parent::getEloquentQuery()
             ->withoutGlobalScopes([\Illuminate\Database\Eloquent\SoftDeletingScope::class]);
+    }
+
+    /** Shown only on a hub that has at least one active connected site. */
+    protected static function networkPublishVisible(): bool
+    {
+        return is_network_hub() && \App\Models\ConnectedSite::query()->active()->exists();
+    }
+
+    /** Target-site multiselect used by both the row and bulk publish actions. */
+    protected static function siteSelect(): \Filament\Forms\Components\Select
+    {
+        return \Filament\Forms\Components\Select::make('sites')
+            ->label('Target sites')
+            ->multiple()
+            ->options(fn () => \App\Models\ConnectedSite::query()->active()->orderBy('id')->pluck('name', 'id'))
+            ->required()
+            ->helperText('Each selected site receives this post with its current content and status. Publishing runs in the background.');
+    }
+
+    /** Per-row: push one post to selected connected sites. */
+    public static function publishToSitesAction(): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make('publishToSites')
+            ->label('Publish to sites')
+            ->icon(\Filament\Support\Icons\Heroicon::OutlinedGlobeAlt)
+            ->color('primary')
+            ->visible(fn (): bool => self::networkPublishVisible())
+            ->schema([self::siteSelect()])
+            ->action(function (array $data, Post $record): void {
+                $result = (new \App\Services\Network\NetworkPublisher)
+                    ->publish($record, array_map('intval', (array) ($data['sites'] ?? [])));
+
+                \Filament\Notifications\Notification::make()
+                    ->title("Queued to {$result['queued']} site(s)")
+                    ->body($result['skipped'] !== [] ? count($result['skipped']).' inactive site(s) skipped.' : 'Publishing in the background.')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    /** Bulk: push the selected posts to selected connected sites. */
+    public static function publishToSitesBulkAction(): \Filament\Actions\BulkAction
+    {
+        return \Filament\Actions\BulkAction::make('publishToSites')
+            ->label('Publish to sites')
+            ->icon(\Filament\Support\Icons\Heroicon::OutlinedGlobeAlt)
+            ->color('primary')
+            ->visible(fn (): bool => self::networkPublishVisible())
+            ->schema([self::siteSelect()])
+            ->action(function (array $data, \Illuminate\Support\Collection $records): void {
+                $count = (new \App\Services\Network\NetworkPublisher)
+                    ->publishMany($records, array_map('intval', (array) ($data['sites'] ?? [])));
+
+                \Filament\Notifications\Notification::make()
+                    ->title("Queued {$count} push(es)")
+                    ->body('Publishing '.$records->count().' post(s) to the selected sites in the background.')
+                    ->success()
+                    ->send();
+            })
+            ->deselectRecordsAfterCompletion();
     }
 
     public static function getRelations(): array
