@@ -22,12 +22,18 @@ class BlogPublisher
      * draft, whatever the batch publish mode) so no work is ever lost — the
      * item keeps its "needs review" label and the admin publishes from the
      * Posts list or via Approve & publish.
+     *
+     * $localVisible = false when the multisite selection did NOT include this
+     * site: the Post is still persisted (it is the source record the hub pushes
+     * to spokes and tracks link status against) but stays an unpublished draft
+     * so it never appears on this blog. Fan-out to the chosen spokes happens in
+     * the caller regardless.
      */
-    public function publish(AiImportItem $item, array $output, bool $held = false): Post
+    public function publish(AiImportItem $item, array $output, bool $held = false, bool $localVisible = true): Post
     {
         $batch = $item->batch;
 
-        return DB::transaction(function () use ($item, $batch, $output, $held) {
+        return DB::transaction(function () use ($item, $batch, $output, $held, $localVisible) {
             $title = trim((string) ($output['title'] ?? $item->row['name'] ?? 'Untitled article'));
             $body = $this->cleanLinks((string) ($output['description_html'] ?? ''), $batch);
 
@@ -49,7 +55,11 @@ class BlogPublisher
 
             $post = $item->post_id ? Post::withTrashed()->find($item->post_id) : null;
 
-            [$status, $publishedAt] = $held ? ['draft', null] : $this->publishSlot($item, $batch);
+            // Held (failed review) OR not published to this site → keep it an
+            // unpublished local draft; otherwise resolve the normal slot.
+            [$status, $publishedAt] = ($held || ! $localVisible)
+                ? ['draft', null]
+                : $this->publishSlot($item, $batch);
 
             $attributes = [
                 'title' => $title,

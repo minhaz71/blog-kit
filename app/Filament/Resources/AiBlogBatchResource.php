@@ -54,6 +54,18 @@ class AiBlogBatchResource extends Resource
         return parent::getEloquentQuery()->where('kind', 'blog');
     }
 
+    /**
+     * Checkbox options for "Publish to": this install (the `local` sentinel)
+     * first, then every active connected site keyed by its ID.
+     */
+    public static function siteCheckboxOptions(): array
+    {
+        $localName = (string) setting('general.site_name', config('app.name'));
+
+        return [\App\Services\Network\NetworkTargets::LOCAL => "This site — {$localName} (local)"]
+            + \App\Models\ConnectedSite::query()->active()->orderBy('id')->pluck('name', 'id')->all();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -199,15 +211,21 @@ class AiBlogBatchResource extends Resource
                         ->helperText('On: an article the reviewer never approves is saved as a DRAFT post labeled "needs review" (never lost — publish it from Content → Posts or via Approve & publish on the item). Off: publish the best version after the last cycle.'),
                 ]),
             Section::make('Multisite publishing')
-                ->description('Also publish each written article to these connected sites. A per-row "site_ids" column in the CSV (e.g. "2,5,34" or "all") overrides this default for that article.')
-                ->visible(fn (): bool => is_network_hub() && \App\Models\ConnectedSite::query()->active()->exists())
+                ->description('Choose which sites each article publishes to — this site and any connected sites are all checkboxes. Untick "This site" to write for the connected sites only (the article stays off this blog). A per-row "site_ids" column in the CSV (e.g. "local,2,5" or "all") overrides this default for that article.')
+                ->visible(fn (): bool => is_network_hub())
                 ->schema([
-                    Select::make('network_site_ids')
-                        ->label('Publish to connected sites')
-                        ->multiple()
-                        ->options(fn () => \App\Models\ConnectedSite::query()->active()->orderBy('id')->pluck('name', 'id'))
-                        ->placeholder('Only this site')
-                        ->helperText('Leave empty to publish only here. Each written, non-held article is pushed to the selected sites in the background.'),
+                    \Filament\Forms\Components\CheckboxList::make('network_site_ids')
+                        ->label('Publish to')
+                        ->options(fn (): array => self::siteCheckboxOptions())
+                        ->descriptions([
+                            \App\Services\Network\NetworkTargets::LOCAL => 'Publish on this install (Hemdox Blog Kit).',
+                        ])
+                        ->default([\App\Services\Network\NetworkTargets::LOCAL])
+                        ->bulkToggleable()
+                        ->columns(2)
+                        ->helperText(fn (): string => \App\Models\ConnectedSite::query()->active()->exists()
+                            ? 'Ticked sites each receive the article. Connected sites are pushed in the background after it is written.'
+                            : 'No connected sites yet — add them under Network → Connected Sites. Until then, articles publish to this site.'),
                 ]),
             Section::make('AI thumbnail image')
                 ->description('Generate a thumbnail from each article\'s title with one image request (no revision). A per-row "generate_image" CSV column (yes/no) overrides this. Set the provider/model in Settings → AI settings (recommended: OpenAI gpt-image-1).')

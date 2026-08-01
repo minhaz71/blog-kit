@@ -18,9 +18,12 @@ namespace App\Services\Ai;
  *  - outline       optional section hints (the writer expands them)
  *  - tone          e.g. friendly-expert, formal, conversational
  *  - target_words  explicit length target (overrides the role default)
- *  - site_ids      multisite only: connected-site IDs to also publish this
- *                  article to, e.g. "2,5,34" or "all". Blank = use the batch
- *                  default; write "none" to keep this article on this site only.
+ *  - site_ids      multisite only: which sites to publish this article to.
+ *                  "local" (or self/this) = this install; connected-site IDs
+ *                  like "2,5,34" = those spokes; combine them, e.g.
+ *                  "local,2,5". "all" = this site + every spoke. Blank = use
+ *                  the batch default; "none" = this site only; a list WITHOUT
+ *                  "local" writes for those spokes only (kept off this site).
  *  - generate_image  yes/no — generate an AI thumbnail from the title
  *  - image_prompt / image_style  optional custom prompt / style for the image
  *  - details       any facts the writer must stay grounded in
@@ -56,7 +59,7 @@ class BlogSampleCsv
                 'First-time investors deciding where to start',
                 'A plain-English decision guide with a clear "who should pick which", not a jargon dump.',
                 'clear, neutral, non-promotional', '1600',
-                '2,5',
+                'local,2,5',
                 'yes', '',
                 'YMYL topic: explain concepts, do not give personalized advice; tell readers to consider a licensed advisor.',
                 '2026-08-03', '09:30',

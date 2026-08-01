@@ -98,20 +98,33 @@ class WriteAiBlogPost implements ShouldQueue
                 return;
             }
 
-            $post = (new BlogPublisher)->publish($item, $output);
+            // Resolve which sites this article publishes to. On a hub the
+            // selection may exclude THIS site (write for spokes only); off the
+            // network, always publish here.
+            $targets = (network_enabled() && is_network_hub())
+                ? \App\Services\Network\NetworkTargets::resolve($item->row['site_ids'] ?? ($batch->network_site_ids ?: null))
+                : ['local' => true, 'sites' => []];
+
+            $post = (new BlogPublisher)->publish($item, $output, localVisible: $targets['local']);
 
             $batch->increment('done_items');
 
             $item->update(['preview_url' => route('blog.show', $post->slug)]);
-            AiActivityLog::write($batch->id, $item->id, 'publish',
-                ($batch->publish_mode === 'publish' ? '🚀 Published' : 'Saved as draft').": \"{$post->title}\" → ".route('blog.show', $post->slug),
-                'success');
+
+            if (! $targets['local']) {
+                AiActivityLog::write($batch->id, $item->id, 'publish',
+                    "✍️ Wrote \"{$post->title}\" for connected sites only — kept as a hidden draft on this site.", 'success');
+            } else {
+                AiActivityLog::write($batch->id, $item->id, 'publish',
+                    ($batch->publish_mode === 'publish' ? '🚀 Published' : 'Saved as draft').": \"{$post->title}\" → ".route('blog.show', $post->slug),
+                    'success');
+            }
 
             // AI thumbnail BEFORE the network fan-out, so the generated image
             // ships with the post to every connected site.
             $this->maybeGenerateThumbnail($item, $post, $batch);
 
-            $this->fanOutToNetwork($item, $post, $batch);
+            $this->fanOutToNetwork($item, $post, $batch, $targets['sites']);
         } catch (\Throwable $e) {
             $this->markFailed($item, $e->getMessage());
         }
@@ -174,22 +187,16 @@ class WriteAiBlogPost implements ShouldQueue
     }
 
     /**
-     * Multisite fan-out: after a real (non-held) publish, also push the
-     * article to the connected sites chosen for this article. Per-row
-     * `site_ids` (CSV) overrides the batch-level default; "all" targets every
-     * active site. Only runs on a hub with the network module on. Failures
-     * here never affect the local publish (already done above).
+     * Multisite fan-out: push the article to the connected sites resolved for
+     * it (from the per-row `site_ids` or the batch checkbox selection). Only
+     * runs on a hub with the network module on. Failures here never affect the
+     * local publish (already done above).
+     *
+     * @param  array<int>  $siteIds  active connected-site IDs (already resolved)
      */
-    protected function fanOutToNetwork(AiImportItem $item, \App\Models\Post $post, \App\Models\AiImportBatch $batch): void
+    protected function fanOutToNetwork(AiImportItem $item, \App\Models\Post $post, \App\Models\AiImportBatch $batch, array $siteIds): void
     {
-        if (! network_enabled() || ! is_network_hub()) {
-            return;
-        }
-
-        $value = $item->row['site_ids'] ?? ($batch->network_site_ids ?: null);
-        $siteIds = \App\Services\Network\NetworkPublisher::resolveTargets($value);
-
-        if ($siteIds === []) {
+        if (! network_enabled() || ! is_network_hub() || $siteIds === []) {
             return;
         }
 
