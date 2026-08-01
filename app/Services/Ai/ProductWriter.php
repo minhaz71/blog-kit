@@ -599,7 +599,7 @@ RULES;
     }
 
     /** Row columns that are pipeline plumbing, not writing material. */
-    protected const INTERNAL_COLUMNS = ['image_link', 'image', 'image_url', 'img', 'photo', 'picture', 'idea_id', 'publish_date', 'publish_time', 'compared_product_ids', 'category_id', '_current'];
+    protected const INTERNAL_COLUMNS = ['image_link', 'image', 'image_url', 'img', 'photo', 'picture', 'idea_id', 'publish_date', 'publish_time', 'compared_product_ids', 'category_id', '_current', 'affiliate_links', 'site_ids', 'generate_image'];
 
     /** Compact a CSV row: drop empties + internal columns, truncate long values. */
     /**

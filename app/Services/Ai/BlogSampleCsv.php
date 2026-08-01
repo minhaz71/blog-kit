@@ -19,7 +19,8 @@ namespace App\Services\Ai;
  *  - tone          e.g. friendly-expert, formal, conversational
  *  - target_words  explicit length target (overrides the role default)
  *  - site_ids      multisite only: connected-site IDs to also publish this
- *                  article to, e.g. "2,5,34" or "all" (blank = only this site)
+ *                  article to, e.g. "2,5,34" or "all". Blank = use the batch
+ *                  default; write "none" to keep this article on this site only.
  *  - generate_image  yes/no — generate an AI thumbnail from the title
  *  - image_prompt / image_style  optional custom prompt / style for the image
  *  - details       any facts the writer must stay grounded in

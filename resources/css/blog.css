@@ -391,3 +391,31 @@
     .bd-toc__list a { padding: 0.45rem 0.5rem; }        /* larger tap target */
     .bd-toc__item--3 > a { margin-left: 0.85rem; }
 }
+
+/* ── Affiliate content: CTA button + disclosure ─────────────────────── */
+.bd-article a.bd-affiliate-btn {
+    display: inline-block;
+    margin: 0.85rem 0;
+    padding: 0.7rem 1.4rem;
+    background: var(--brand);
+    color: #fff !important;
+    font-weight: 650;
+    line-height: 1.2;
+    border-radius: 0.6rem;
+    text-decoration: none !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+    transition: background .15s ease, transform .05s ease;
+}
+.bd-article a.bd-affiliate-btn::after { content: " ›"; }
+.bd-article a.bd-affiliate-btn:hover { background: var(--brand-dark); color: #fff !important; }
+.bd-article a.bd-affiliate-btn:active { transform: translateY(1px); }
+
+.bd-article .bd-affiliate-note {
+    margin: 0.75rem 0 1.4rem;
+    padding: 0.65rem 0.95rem;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    background: var(--brand-soft);
+    border-left: 3px solid var(--brand);
+    border-radius: 0.45rem;
+}

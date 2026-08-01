@@ -36,6 +36,14 @@ class BlogPublisher
             // CSS in the blog stylesheet); anything else is stripped, and
             // id/style attributes never ship.
             $body = $this->enforceClassWhitelist($body);
+
+            // Affiliate content: every external (affiliate) link gets
+            // rel="sponsored nofollow noopener" + target="_blank" — the correct
+            // technique, enforced here so the writer never has to (and can't
+            // forget). Internal/relative links are untouched.
+            if ($this->isAffiliate($item, $batch)) {
+                $body = $this->enforceAffiliateRel($body);
+            }
             $excerpt = trim(strip_tags((string) ($output['short_description_html'] ?? '')));
             $words = str_word_count(strip_tags($body));
 
@@ -107,6 +115,43 @@ class BlogPublisher
 
             return $post;
         });
+    }
+
+    /** Is this item affiliate content? (role, per-row links, or batch mode.) */
+    protected function isAffiliate(AiImportItem $item, $batch): bool
+    {
+        return ($item->row['role'] ?? null) === 'affiliate'
+            || ! empty($item->row['affiliate_links'])
+            || (bool) ($batch->affiliate_mode ?? false);
+    }
+
+    /**
+     * Add rel="sponsored nofollow noopener" + target="_blank" to every EXTERNAL
+     * (http/https) link in the body — the disclosure/technique Google expects
+     * for affiliate links. Existing rel/target are replaced so we never
+     * double-stack. Internal root-relative links (already relativized) are
+     * left alone. Runs after the class whitelist, so bd-affiliate-btn survives.
+     */
+    public function enforceAffiliateRel(string $html): string
+    {
+        return (string) preg_replace_callback('~<a\b([^>]*)>~is', function (array $m): string {
+            $attrs = $m[1];
+
+            if (! preg_match('~href\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)~i', $attrs, $h)) {
+                return $m[0];
+            }
+
+            $href = html_entity_decode(trim($h[1], "\"'"));
+
+            if (! preg_match('~^https?://~i', $href)) {
+                return $m[0]; // internal / relative — not an affiliate/outbound link
+            }
+
+            // Drop any rel/target the model added, then set the correct ones.
+            $attrs = (string) preg_replace('~\s(?:rel|target)\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)~i', '', $attrs);
+
+            return '<a'.rtrim($attrs).' rel="sponsored nofollow noopener" target="_blank">';
+        }, $html);
     }
 
     /**

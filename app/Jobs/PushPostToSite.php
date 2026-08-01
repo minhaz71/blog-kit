@@ -39,7 +39,9 @@ class PushPostToSite implements ShouldQueue
         }
 
         $payload = NetworkPostPayload::for($post);
-        $hash = NetworkPostPayload::hash($payload);
+        // Store the canonical content hash (same fn the spoke reports on pull)
+        // so conflict detection compares apples to apples.
+        $hash = NetworkPostPayload::contentHash($post);
 
         try {
             $result = (new NetworkClient)->request($site, 'POST', 'posts', $payload);

@@ -139,6 +139,11 @@ class BlogPlanner
             'make_image' => 'generate_image', 'thumbnail' => 'generate_image', 'ai_image' => 'generate_image',
             'image_prompt' => 'image_prompt', 'img_prompt' => 'image_prompt',
             'image_style' => 'image_style', 'img_style' => 'image_style',
+            // Affiliate content: "Name | https://aff.link" entries separated by
+            // ; or newlines. Presence marks the row as an affiliate article.
+            'affiliate_links' => 'affiliate_links', 'affiliate' => 'affiliate_links', 'aff_links' => 'affiliate_links',
+            'affiliate_products' => 'affiliate_links', 'product_links' => 'affiliate_links', 'affiliate_url' => 'affiliate_links',
+            'content_type' => 'role', 'article_type' => 'role', 'type' => 'role',
         ];
 
         $handle = fopen($path, 'r');
@@ -173,6 +178,11 @@ class BlogPlanner
             }
 
             $seen[$dedupe] = true;
+            // An article with affiliate links is affiliate content unless the
+            // CSV set an explicit role/type.
+            if (! empty($row['affiliate_links']) && empty($row['role'])) {
+                $row['role'] = 'affiliate';
+            }
             $row['role'] = $row['role'] ?? 'article';
             $row['angle'] = $row['angle'] ?? 'Research the topic thoroughly and answer the search intent behind this exact title completely.';
             $topics[] = $row;

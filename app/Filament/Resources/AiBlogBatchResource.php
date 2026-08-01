@@ -181,13 +181,17 @@ class AiBlogBatchResource extends Resource
                         ->helperText('Staggers publishing: article 1 at batch start, article 2 one interval later, and so on ("scheduled" until its time; the blog cron publishes each on schedule). A publish_date column in the CSV overrides this per article. Applies in publish mode.'),
                     Select::make('link_scope')
                         ->label('Internal linking targets')
-                        ->options([
+                        ->options(fn (): array => ecommerce_enabled() ? [
                             'ecommerce' => 'Ecommerce — products, product categories, blog, blog categories, home',
                             'blog_only' => 'Blog only — other articles and blog categories',
+                        ] : [
+                            'blog_only' => 'Blog only — other articles and blog categories',
                         ])
-                        ->default('ecommerce')
+                        // Default to blog-only unless the store module is on, so a
+                        // pure blog never links into a (non-existent) catalog.
+                        ->default(fn (): string => ecommerce_enabled() ? 'ecommerce' : 'blog_only')
                         ->native(false)
-                        ->helperText('What the AI may link to inside each article, with keyword-bearing anchors. Ecommerce mode routes readers to relevant products and categories; blog-only keeps links within the blog.'),
+                        ->helperText('What the AI may link to inside each article, with keyword-bearing anchors. Blog-only keeps links within the blog; ecommerce mode also routes readers to relevant products and categories.'),
                     Toggle::make('require_approval')
                         ->label('Hold articles that fail review')
                         ->default(true)
@@ -219,6 +223,19 @@ class AiBlogBatchResource extends Resource
                         ->label('Image style (optional)')
                         ->placeholder('modern flat editorial illustration, soft lighting')
                         ->helperText('Appended to the title-based prompt. A per-row "image_style" column overrides this.'),
+                ]),
+            Section::make('Affiliate content')
+                ->description('Turn these into affiliate/product-recommendation articles: the writer adds an FTC disclosure, honest pros/cons reviews, and a call-to-action button per product; affiliate links get rel="sponsored nofollow" automatically. Put each article\'s links in a CSV "affiliate_links" column ("Product Name | https://aff.link" separated by ; or new lines).')
+                ->schema([
+                    \Filament\Forms\Components\Toggle::make('affiliate_mode')
+                        ->label('This is an affiliate blog (affiliate content)')
+                        ->inline(false)
+                        ->helperText('A CSV row with an "affiliate_links" column is treated as affiliate content even if this is off.'),
+                    \Filament\Forms\Components\Textarea::make('affiliate_disclosure')
+                        ->label('Affiliate disclosure (optional)')
+                        ->rows(2)
+                        ->placeholder(\App\Services\Ai\BlogWriter::DEFAULT_AFFILIATE_DISCLOSURE)
+                        ->helperText('Shown near the top of every affiliate article. Leave blank for the default.'),
                 ]),
         ]);
     }

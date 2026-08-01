@@ -25,7 +25,7 @@ class NetworkPostIngestor
     {
         $origin = $hubKey.':'.($data['network_post_id'] ?? '');
 
-        return DB::transaction(function () use ($origin, $data) {
+        return DB::transaction(function () use ($hubKey, $origin, $data) {
             $title = trim((string) ($data['title'] ?? 'Untitled article'));
             $body = (new BlogPublisher)->enforceClassWhitelist((string) ($data['content'] ?? ''));
             $excerpt = trim((string) ($data['excerpt'] ?? ''));
@@ -45,7 +45,7 @@ class NetworkPostIngestor
                 'status' => $status,
                 'published_at' => $publishedAt,
                 'featured_image_alt' => trim((string) ($data['featured_image_alt'] ?? '')) ?: null,
-                'featured_image' => $this->resolveImage($data, $post?->featured_image),
+                'featured_image' => $this->resolveImage($hubKey, $data, $post?->featured_image),
                 'network_origin' => $origin,
             ];
 
@@ -117,20 +117,31 @@ class NetworkPostIngestor
     protected function resolveAuthor(?array $author): ?int
     {
         if ($author && ! empty($author['email'])) {
-            $existing = User::where('email', $author['email'])->first();
-            if ($existing) {
-                return $existing->id; // never overwrite a real local user's profile
+            // firstOrCreate is atomic on the unique email, so concurrent
+            // fan-out pushes by the same new author never race into a
+            // duplicate-key failure. An existing local user is returned as-is
+            // (its profile is never overwritten).
+            $user = User::firstOrCreate(
+                ['email' => (string) $author['email']],
+                [
+                    'name' => (string) ($author['name'] ?: 'Author'),
+                    'password' => Hash::make(Str::random(40)),
+                    'is_active' => false, // attribution only — cannot log in
+                    'job_title' => $author['job_title'] ?? null,
+                    'bio' => $author['bio'] ?? null,
+                    'social_links' => ! empty($author['social_links']) ? (array) $author['social_links'] : null,
+                ],
+            );
+
+            // Mirror the hub's author URL slug on first creation (guarded, so
+            // set explicitly) when it is free — keeps /author/<slug> consistent
+            // across sites. Never touch an existing user's slug.
+            if ($user->wasRecentlyCreated && ! empty($author['public_slug'])
+                && ! User::where('public_slug', $author['public_slug'])->where('id', '!=', $user->id)->exists()) {
+                $user->forceFill(['public_slug' => (string) $author['public_slug']])->save();
             }
 
-            return User::create([
-                'name' => (string) ($author['name'] ?: 'Author'),
-                'email' => (string) $author['email'],
-                'password' => Hash::make(Str::random(40)),
-                'is_active' => false, // attribution only — cannot log in
-                'job_title' => $author['job_title'] ?? null,
-                'bio' => $author['bio'] ?? null,
-                'social_links' => ! empty($author['social_links']) ? (array) $author['social_links'] : null,
-            ])->id;
+            return $user->id;
         }
 
         return User::query()->orderBy('id')->value('id');
@@ -143,7 +154,7 @@ class NetworkPostIngestor
      *    public disk under a content-addressed path (idempotent), return it;
      *  - present but not shipped (too large / decode fails) → keep $current.
      */
-    protected function resolveImage(array $data, ?string $current): ?string
+    protected function resolveImage(string $hubKey, array $data, ?string $current): ?string
     {
         if (! ($data['has_featured_image'] ?? false)) {
             return null;
@@ -165,11 +176,12 @@ class NetworkPostIngestor
         }
 
         $ext = image_type_to_extension($info[2], false) ?: 'img';
-        // SEO-friendly filename from the post slug (not a hash), matching how
-        // the hub names thumbnails, so the image URL stays descriptive on every
-        // site. One post → one file, replaced in place on re-push.
+        // SEO-friendly filename from the post slug (not a hash), namespaced by
+        // the hub key so two hubs sharing a slug can't overwrite each other's
+        // image on one spoke. One post → one file, replaced in place on re-push.
         $base = Str::slug((string) ($data['slug'] ?? $data['title'] ?? 'thumbnail')) ?: 'thumbnail';
-        $relative = 'network/'.$base.'.'.$ext;
+        $hubDir = Str::slug($hubKey) ?: 'hub';
+        $relative = 'network/'.$hubDir.'/'.$base.'.'.$ext;
 
         Storage::disk('public')->put($relative, $bytes);
 

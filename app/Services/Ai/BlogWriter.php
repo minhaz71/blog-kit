@@ -141,6 +141,8 @@ SYS;
         'bd-verdict',    // short bottom-line/verdict box
         'bd-faq',        // FAQ block inside the body (on a wrapper <div>)
         'bd-table-wrap', // horizontal-scroll wrapper around wide tables
+        'bd-affiliate-btn',  // affiliate call-to-action button (on an <a>)
+        'bd-affiliate-note', // affiliate disclosure box (on a <p>/<div>)
     ];
 
     /**
@@ -165,10 +167,43 @@ FUNNEL ARTICLE RULES (this batch was researched by the Content Cluster & Funnel 
 - required_links lists researched URLs this article MUST link contextually (they are also in the catalog). Weave every one of them in naturally.
 RULES;
 
+    /**
+     * Affiliate/recommendation content rulebook — added to the cached system
+     * block for affiliate batches. Enforces FTC disclosure, Google
+     * product-review-system E-E-A-T (honest hands-on evaluation, real pros AND
+     * cons), and the correct affiliate linking technique (contextual link +
+     * one clear CTA button per product; the rel/target attributes are added
+     * mechanically at publish, so the writer never sets them).
+     */
+    public const AFFILIATE_RULES = <<<'RULES'
+AFFILIATE ARTICLE RULES (this is affiliate / product-recommendation content — follow strictly):
+
+DISCLOSURE (FTC + Google, mandatory): near the very top, BEFORE the first recommendation, place a short, clear affiliate disclosure in a <p class="bd-affiliate-note"> element. Use the exact DISCLOSURE TEXT provided in the assignment when given. Never hide or omit it.
+
+E-E-A-T & HONESTY (Google's product-reviews system rewards this):
+- Write from genuine, first-hand-style evaluation: what each product is like to use, who it is for, and REAL pros AND cons. Never claim lab tests or measurements you were not given.
+- Give specific, evidence-based reasons for every recommendation (concrete benefits, trade-offs, use-cases). No hype, no invented statistics, ratings, or "customers say" claims.
+- Compare the options fairly (a comparison <table> where it helps) and name the best pick for different reader needs ("best for beginners", "best on a budget", "best overall").
+- Cover downsides and who should NOT buy each option — honest limitations are a trust and ranking signal.
+
+AFFILIATE LINKS & BUTTONS (use ONLY the affiliate URLs provided in the assignment — never invent, alter, or shorten one):
+- The first time you recommend a product, link it IN CONTEXT with a descriptive anchor (the product's real name or a natural phrase). Never "click here" / "read more".
+- ALSO give each recommended product ONE clear call-to-action BUTTON, placed right after that product's mini-review:
+  <a class="bd-affiliate-btn" href="EXACT_AFFILIATE_URL">Check price</a>
+  (you may vary the label: "Check price", "See latest price", "View on <retailer>"). Exactly ONE button per product; never stack buttons in a list.
+- Do not link the same product more than twice total. Do NOT add rel or target attributes yourself — they are added automatically.
+
+STRUCTURE: intro (with the disclosure) naming who this guide helps → one H2/H3 section per product (its real name) ending in that product's button → a comparison table → a short "which should you choose" verdict → FAQs. Keep it genuinely useful, not a thin link farm.
+RULES;
+
+    /** Fallback affiliate disclosure when the batch sets none. */
+    public const DEFAULT_AFFILIATE_DISCLOSURE = 'Disclosure: this article contains affiliate links. If you buy through them we may earn a small commission at no extra cost to you. Our picks are based on independent research.';
+
     /** Given to EVERY blog batch — the design toolkit that makes articles detail-oriented. */
     public const CLASS_TOOLKIT = <<<'RULES'
 DESIGN TOOLKIT (allowed classes, each styled by the site's blog stylesheet — use 2-4 per article where they genuinely help the reader, never decoratively):
   <div class="bd-callout"> key insight worth remembering, <div class="bd-tip"> practical tip, <div class="bd-warning"> caution or "when this is NOT for you", <ol class="bd-steps"> numbered how-to steps, <div class="bd-proscons"> containing exactly two <ul> (pros first, cons second), <div class="bd-verdict"> the bottom-line recommendation, <div class="bd-faq"> in-body FAQ block, <div class="bd-table-wrap"> around any wide comparison table.
+For affiliate articles only: <a class="bd-affiliate-btn"> a single call-to-action button per recommended product, and <p class="bd-affiliate-note"> the affiliate disclosure.
 These are the ONLY class attributes allowed; anything else is stripped mechanically. Plain semantic tags (h2, h3, p, ul, ol, table, blockquote) are already beautifully styled by the site — never fake structure with the toolkit when a plain tag is right.
 RULES;
 
@@ -232,6 +267,12 @@ RULES;
         // Every blog batch gets the design toolkit — the publisher strips
         // any class outside the whitelist, so this is safe by construction.
         $sections[] = self::CLASS_TOOLKIT;
+
+        // Affiliate content: rulebook + the exact disclosure text (per batch).
+        if ($batch->affiliate_mode) {
+            $disclosure = trim((string) $batch->affiliate_disclosure) ?: self::DEFAULT_AFFILIATE_DISCLOSURE;
+            $sections[] = self::AFFILIATE_RULES."\n\nDISCLOSURE TEXT (use verbatim inside the bd-affiliate-note):\n".$disclosure;
+        }
 
         // Article-flavored search rulebook (not the product engine's).
         $sections[] = self::BLOG_SEARCH_RULES;
@@ -305,12 +346,67 @@ JSON;
 
         return "Article assignment:\n".static::compactRow($item->row)
             .static::currentCopyBlock($item->row)
+            .static::affiliateBlock($item->row)
             .($digest !== '' ? "\n\n".$digest : '')
             .($learned !== '' ? "\n\n".$learned : '')
             .static::keywordDirective($item->row)
             ."\n\nTARGET LENGTH: ".static::lengthDirective($item->row)
             ."\n\nSTRUCTURE VARIATION for this article: {$directive}"
             ."\n\nReturn the JSON now.";
+    }
+
+    /**
+     * Parse the CSV "affiliate_links" column into [name => url] pairs. Entries
+     * are separated by ";" or newlines; each is "Name | https://url" (a bare
+     * URL is allowed — the domain becomes the name).
+     *
+     * @return array<int, array{name:string, url:string}>
+     */
+    public static function affiliateLinks(array $row): array
+    {
+        $raw = trim((string) ($row['affiliate_links'] ?? ''));
+
+        if ($raw === '') {
+            return [];
+        }
+
+        $out = [];
+        foreach (preg_split('/[;\n]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $entry) {
+            $parts = array_map('trim', explode('|', $entry, 2));
+            $url = '';
+            $name = '';
+
+            // "Name | url" or "url | Name" or bare "url".
+            foreach ($parts as $p) {
+                if (preg_match('~^https?://~i', $p)) {
+                    $url = $p;
+                } elseif ($p !== '') {
+                    $name = $p;
+                }
+            }
+
+            if ($url === '') {
+                continue;
+            }
+
+            $out[] = ['name' => $name !== '' ? $name : (parse_url($url, PHP_URL_HOST) ?: $url), 'url' => $url];
+        }
+
+        return $out;
+    }
+
+    /** Per-item affiliate products block (only when the row carries links). */
+    public static function affiliateBlock(array $row): string
+    {
+        $links = static::affiliateLinks($row);
+
+        if ($links === []) {
+            return '';
+        }
+
+        $lines = collect($links)->map(fn ($l) => '- '.$l['name'].' — '.$l['url'])->implode("\n");
+
+        return "\n\nAFFILIATE PRODUCTS (recommend and link EACH of these; use the EXACT URL, add one bd-affiliate-btn button after its mini-review, and a contextual in-text link the first time you mention it):\n".$lines;
     }
 
     /**
@@ -335,6 +431,7 @@ JSON;
             'pillar' => '1800-2500 words. This is the cluster PILLAR: cover the topic comprehensively (definitions, choices, comparisons, how-tos, honest limitations) so every spoke article can link back to a section here.',
             'spoke' => '900-1500 words. This is a SPOKE: answer its one specific intent completely and link the pillar for breadth — do not drift into sibling topics.',
             'comparison' => '1200-1900 words. This is a COMPARISON article: cover every given facet difference, a comparison table, and a clear verdict — do not pad with generic content once the two options are fully compared.',
+            'affiliate' => '1500-2600 words. This is an AFFILIATE round-up/review: a genuine mini-review of each product (real pros AND cons), a comparison table, best-for verdicts, and FAQs. Depth and honesty over length — never a thin link farm.',
             default => '700-1800 words, sized to the topic: a narrow question answered completely may stop near 700; a broad comparison or guide may need the top of the range. Cover the intent fully, then stop.',
         };
     }

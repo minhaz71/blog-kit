@@ -104,7 +104,7 @@ class NetworkPuller
             return;
         }
 
-        $currentHubHash = NetworkPostPayload::hash(NetworkPostPayload::for($hubPost));
+        $currentHubHash = NetworkPostPayload::contentHash($hubPost);
 
         if ($remoteHash === $currentHubHash) {
             $link->update(['status' => 'synced', 'remote_hash' => $remoteHash, 'conflict_detected_at' => null]);

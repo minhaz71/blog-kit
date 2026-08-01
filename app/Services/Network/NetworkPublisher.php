@@ -67,8 +67,18 @@ class NetworkPublisher
             return [];
         }
 
-        if (is_string($value) && strtolower(trim($value)) === 'all') {
-            return self::allSiteIds();
+        if (is_string($value)) {
+            $lower = strtolower(trim($value));
+
+            // Explicit "local only" tokens — a row can opt OUT of a batch
+            // default so the article stays on this site.
+            if (in_array($lower, ['none', 'local', 'off', 'no', 'here'], true)) {
+                return [];
+            }
+
+            if ($lower === 'all') {
+                return self::allSiteIds();
+            }
         }
 
         $ids = is_array($value)

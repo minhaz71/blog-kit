@@ -3,6 +3,7 @@
 namespace App\Services\Network;
 
 use App\Models\Post;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -93,37 +94,98 @@ class NetworkPostPayload
         return [
             'filename' => basename($path),
             'mime' => $disk->mimeType($path) ?: 'application/octet-stream',
-            'sha256' => hash('sha256', $bytes),
+            'sha256' => self::imageSha($path),
             'data' => base64_encode($bytes),
         ];
     }
 
+    /** sha256 of the image bytes on the public disk (no base64), or null. */
+    public static function imageSha(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        $disk = Storage::disk('public');
+
+        return $disk->exists($path) ? hash('sha256', (string) $disk->get($path)) : null;
+    }
+
     /**
-     * Canonical content hash for change detection. Computed over the CONTENT
-     * only — excludes site-local artifacts that legitimately differ between
-     * hub and spoke (post id, slug, image filename/url, the raw image bytes),
-     * so an unchanged post hashes identically on both sides. The featured
-     * image contributes via its byte fingerprint (sha256), not its filename.
+     * Canonical content hash for change detection, computed DIRECTLY from a
+     * Post — no base64 (cheap on list endpoints) and identical on hub and
+     * spoke. Excludes site-local artifacts (post id, slug, image filename/url,
+     * raw bytes). Normalized so legitimate cross-site differences don't create
+     * false conflicts: published_at in UTC (installs may have different
+     * timezones), tags sorted (pivot order differs), category by name, author
+     * by email. The image contributes via its byte fingerprint (sha256).
+     */
+    public static function contentHash(Post $post): string
+    {
+        $post->loadMissing(['seoMeta', 'category', 'tags', 'author', 'allFaqs']);
+
+        $faqs = $post->allFaqs->sortBy('sort_order')
+            ->map(fn ($f) => ['q' => (string) $f->question, 'a' => (string) $f->answer])->values()->all();
+
+        $tags = $post->tags->pluck('name')->map(fn ($n) => (string) $n)->sort()->values()->all();
+
+        return self::hashCanonical([
+            'title' => (string) $post->title,
+            'excerpt' => (string) $post->excerpt,
+            'content' => (string) $post->content,
+            'status' => (string) $post->status,
+            'published_at' => $post->published_at?->clone()->utc()->toIso8601String(),
+            'featured_image_alt' => $post->featured_image_alt,
+            'featured_image' => self::imageSha($post->featured_image),
+            'seo' => [
+                'title' => (string) ($post->seoMeta?->title ?? ''),
+                'description' => (string) ($post->seoMeta?->description ?? ''),
+                'focus_keyword' => (string) ($post->seoMeta?->focus_keyword ?? ''),
+                'schema_type' => $post->seoMeta?->schema_type,
+            ],
+            'category' => $post->category?->name,
+            'tags' => $tags,
+            'author' => $post->author?->email ?? $post->author?->name,
+            'faqs' => $faqs,
+        ]);
+    }
+
+    /**
+     * Hash a wire PAYLOAD (from for()) with the SAME normalization as
+     * contentHash — kept so a payload received over the wire can be hashed
+     * without re-loading the model. published_at → UTC; tags sorted.
      */
     public static function hash(array $payload): string
     {
         $fi = $payload['featured_image'] ?? null;
+        $publishedAt = $payload['published_at'] ?? null;
 
-        $canonical = [
+        try {
+            $publishedAt = $publishedAt ? Carbon::parse($publishedAt)->utc()->toIso8601String() : null;
+        } catch (\Throwable) {
+            // leave as-is if unparseable
+        }
+
+        $tags = collect($payload['tags'] ?? [])->map(fn ($n) => (string) $n)->sort()->values()->all();
+
+        return self::hashCanonical([
             'title' => (string) ($payload['title'] ?? ''),
             'excerpt' => (string) ($payload['excerpt'] ?? ''),
             'content' => (string) ($payload['content'] ?? ''),
             'status' => (string) ($payload['status'] ?? ''),
-            'published_at' => $payload['published_at'] ?? null,
+            'published_at' => $publishedAt,
             'featured_image_alt' => $payload['featured_image_alt'] ?? null,
             'featured_image' => $fi['sha256'] ?? null,
             'seo' => $payload['seo'] ?? [],
             'category' => $payload['category']['name'] ?? null,
-            'tags' => $payload['tags'] ?? [],
+            'tags' => $tags,
             'author' => $payload['author']['email'] ?? ($payload['author']['name'] ?? null),
             'faqs' => $payload['faqs'] ?? [],
-        ];
+        ]);
+    }
 
+    protected static function hashCanonical(array $canonical): string
+    {
         return hash('sha256', json_encode($canonical, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
 }

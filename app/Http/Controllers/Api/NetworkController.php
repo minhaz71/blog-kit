@@ -123,8 +123,9 @@ class NetworkController extends Controller
                 'author' => $p->author?->name,
                 'excerpt' => Str::limit(strip_tags((string) $p->excerpt), 200),
                 // Lets a hub detect a spoke-side edit (divergence from what it
-                // last pushed) — computed the same way as the hub's push hash.
-                'content_hash' => NetworkPostPayload::hash(NetworkPostPayload::for($p)),
+                // last pushed) — computed directly (no base64) and identically
+                // to the hub's push hash.
+                'content_hash' => NetworkPostPayload::contentHash($p),
             ])->all(),
             'current_page' => $page->currentPage(),
             'last_page' => $page->lastPage(),
