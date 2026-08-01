@@ -107,6 +107,10 @@ class WriteAiBlogPost implements ShouldQueue
                 ($batch->publish_mode === 'publish' ? '🚀 Published' : 'Saved as draft').": \"{$post->title}\" → ".route('blog.show', $post->slug),
                 'success');
 
+            // AI thumbnail BEFORE the network fan-out, so the generated image
+            // ships with the post to every connected site.
+            $this->maybeGenerateThumbnail($item, $post, $batch);
+
             $this->fanOutToNetwork($item, $post, $batch);
         } catch (\Throwable $e) {
             $this->markFailed($item, $e->getMessage());
@@ -125,6 +129,48 @@ class WriteAiBlogPost implements ShouldQueue
 
         $this->markFailed($item, 'Job was killed (timeout or fatal error): '.($e?->getMessage() ?? 'unknown'));
         $this->maybeFinalize($item->batch);
+    }
+
+    /**
+     * Generate an AI thumbnail for the just-published article when requested
+     * (per-row "generate_image" wins; else the batch default), unless the post
+     * already has a featured image. ONE image request, no revision. Never
+     * fatal — the article is already published if this fails.
+     */
+    protected function maybeGenerateThumbnail(AiImportItem $item, \App\Models\Post $post, \App\Models\AiImportBatch $batch): void
+    {
+        // Per-row override → batch default.
+        $rowWants = array_key_exists('generate_image', $item->row)
+            ? filter_var($item->row['generate_image'], FILTER_VALIDATE_BOOLEAN)
+            : null;
+        $wanted = $rowWants ?? (bool) $batch->generate_images;
+
+        if (! $wanted || $post->featured_image) {
+            return;
+        }
+
+        if (! \App\Services\Ai\ImageGenerator::isConfigured()) {
+            AiActivityLog::write($batch->id, $item->id, 'publish',
+                '🖼️ Thumbnail requested but no image provider key is set (Settings → AI settings) — skipped.', 'warning');
+
+            return;
+        }
+
+        try {
+            $path = (new \App\Services\Ai\ThumbnailService)->generateForPost($post, (string) $post->title, [
+                'custom' => $item->row['image_prompt'] ?? null,
+                'style' => $item->row['image_style'] ?? ($batch->image_style ?: null),
+            ]);
+
+            if ($path) {
+                $provider = \App\Services\Ai\ImageGenerator::provider();
+                AiActivityLog::write($batch->id, $item->id, 'publish',
+                    "🖼️ Generated thumbnail for \"{$post->title}\" via {$provider}/".\App\Services\Ai\ImageGenerator::model($provider).'.', 'success');
+            }
+        } catch (\Throwable $e) {
+            AiActivityLog::write($batch->id, $item->id, 'publish',
+                '🖼️ Thumbnail generation failed ('.mb_substr($e->getMessage(), 0, 160).') — article published without one.', 'warning');
+        }
     }
 
     /**

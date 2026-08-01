@@ -20,5 +20,7 @@ Route::prefix('v1')->group(function () {
         // Phase 5: delete a post this hub manages ({id} = the hub's network_post_id).
         Route::delete('/posts/{id}', [\App\Http\Controllers\Api\NetworkController::class, 'deletePost'])
             ->where('id', '[0-9]+');
+        // One-click update: trigger this site's own blogkit:update in the background.
+        Route::post('/update', [\App\Http\Controllers\Api\NetworkController::class, 'update']);
     });
 });

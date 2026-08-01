@@ -48,6 +48,7 @@ class AiSettings extends Page
             'openai_api_key', 'openai_model', 'openai_extra_models',
             'gemini_api_key', 'gemini_model', 'gemini_extra_models',
             'google_drive_api_key',
+            'image_provider', 'image_model', 'image_size', 'image_quality', 'image_style',
             'default_system_prompt',
         ];
     }
@@ -131,6 +132,42 @@ class AiSettings extends Page
                         ->hiddenLabel()
                         ->rows(5)
                         ->placeholder(\App\Services\Ai\ProductWriter::DEFAULT_SYSTEM),
+                ]),
+            Section::make('AI thumbnail images')
+                ->icon(\Filament\Support\Icons\Heroicon::OutlinedPhoto)
+                ->iconColor('success')
+                ->description(new HtmlString('Generate a blog thumbnail from the article title with ONE image request (no revision). Uses the API key of the selected provider above. <strong>Recommended: OpenAI gpt-image-1.</strong>'))
+                ->columns(2)
+                ->schema([
+                    \Filament\Forms\Components\Select::make('image_provider')
+                        ->label('Image provider / model')
+                        ->options(\App\Services\Ai\ImageGenerator::PROVIDER_LABELS)
+                        ->default('openai')
+                        ->native(false)
+                        ->helperText('Uses that provider\'s API key set above.'),
+                    TextInput::make('image_model')
+                        ->label('Model id (optional)')
+                        ->placeholder('gpt-image-1')
+                        ->helperText('Leave blank for the provider default (gpt-image-1 / imagen-3.0-generate-002).'),
+                    \Filament\Forms\Components\Select::make('image_size')
+                        ->label('Size')
+                        ->options([
+                            '1536x1024' => 'Landscape 1536×1024 (thumbnail)',
+                            '1024x1024' => 'Square 1024×1024',
+                            '1024x1536' => 'Portrait 1024×1536',
+                        ])
+                        ->default('1536x1024')
+                        ->native(false),
+                    \Filament\Forms\Components\Select::make('image_quality')
+                        ->label('Quality (OpenAI)')
+                        ->options(['low' => 'Low (cheapest)', 'medium' => 'Medium', 'high' => 'High'])
+                        ->default('medium')
+                        ->native(false),
+                    \Filament\Forms\Components\TextInput::make('image_style')
+                        ->label('Default style')
+                        ->placeholder('modern flat editorial illustration, soft lighting')
+                        ->helperText('Appended to the title-based prompt. A per-batch or per-row style overrides this.')
+                        ->columnSpanFull(),
                 ]),
             Section::make('Google Drive')
                 ->icon(\Filament\Support\Icons\Heroicon::OutlinedPhoto)

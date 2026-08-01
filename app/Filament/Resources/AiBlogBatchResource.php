@@ -205,6 +205,21 @@ class AiBlogBatchResource extends Resource
                         ->placeholder('Only this site')
                         ->helperText('Leave empty to publish only here. Each written, non-held article is pushed to the selected sites in the background.'),
                 ]),
+            Section::make('AI thumbnail image')
+                ->description('Generate a thumbnail from each article\'s title with one image request (no revision). A per-row "generate_image" CSV column (yes/no) overrides this. Set the provider/model in Settings → AI settings (recommended: OpenAI gpt-image-1).')
+                ->columns(2)
+                ->schema([
+                    \Filament\Forms\Components\Toggle::make('generate_images')
+                        ->label('Generate a thumbnail for each article')
+                        ->inline(false)
+                        ->helperText(fn (): string => \App\Services\Ai\ImageGenerator::isConfigured()
+                            ? 'Image provider configured ('.\App\Services\Ai\ImageGenerator::provider().').'
+                            : '⚠ No image provider key set yet — add one in Settings → AI settings.'),
+                    \Filament\Forms\Components\TextInput::make('image_style')
+                        ->label('Image style (optional)')
+                        ->placeholder('modern flat editorial illustration, soft lighting')
+                        ->helperText('Appended to the title-based prompt. A per-row "image_style" column overrides this.'),
+                ]),
         ]);
     }
 

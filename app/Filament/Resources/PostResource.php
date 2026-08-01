@@ -128,6 +128,7 @@ class PostResource extends Resource
                     fn (Post $record): bool => $record->status === 'published' && $record->published_at?->isPast(),
                 ),
                 \Filament\Actions\EditAction::make(),
+                self::generateThumbnailAction(),
                 self::publishToSitesAction(),
                 self::syncToNetworkAction(),
                 self::removeFromNetworkAction(),
@@ -194,6 +195,26 @@ class PostResource extends Resource
                 \Filament\Notifications\Notification::make()
                     ->title("Queued to {$result['queued']} site(s)")
                     ->body($result['skipped'] !== [] ? count($result['skipped']).' inactive site(s) skipped.' : 'Publishing in the background.')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    /** Generate an AI thumbnail from the post title (and re-sync it if networked). */
+    public static function generateThumbnailAction(): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make('generateThumbnail')
+            ->label('Generate thumbnail')
+            ->icon(\Filament\Support\Icons\Heroicon::OutlinedPhoto)
+            ->color('gray')
+            ->visible(fn (): bool => \App\Services\Ai\ImageGenerator::isConfigured())
+            ->requiresConfirmation()
+            ->modalDescription('Generate an AI thumbnail from this post\'s title (one image request) and set it as the featured image. If the post is published to other sites, they will be updated too.')
+            ->action(function (Post $record): void {
+                \App\Jobs\GenerateThumbnailJob::dispatch($record->id);
+                \Filament\Notifications\Notification::make()
+                    ->title('Generating thumbnail…')
+                    ->body('It will appear on the post shortly (needs a running queue worker).')
                     ->success()
                     ->send();
             });

@@ -52,6 +52,7 @@ class NetworkController extends Controller
                 'taxonomies.sync' => true,
                 'media.sync' => true,
                 'authors.sync' => true,
+                'remote.update' => (bool) setting('network.allow_remote_update', true),
             ],
         ]);
     }
@@ -150,5 +151,33 @@ class NetworkController extends Controller
         $post->delete(); // soft delete (Post uses SoftDeletes)
 
         return response()->json(['ok' => true, 'deleted' => true]);
+    }
+
+    /**
+     * Trigger this site's own software update (blogkit:update) in the
+     * background — the same flow as Admin → Security → System updates
+     * (preflight + mandatory backup + git pull + migrate). Opt-in per site via
+     * the "Allow remote updates" setting so a hub can't force an update on a
+     * site that hasn't allowed it.
+     */
+    public function update(Request $request): JsonResponse
+    {
+        if (! (bool) setting('network.allow_remote_update', true)) {
+            return response()->json(['ok' => false, 'error' => 'Remote updates are disabled on this site.'], 403);
+        }
+
+        if (! \App\Support\Version::isGitRepo()) {
+            return response()->json(['ok' => false, 'error' => 'This site is not a git checkout — cannot self-update.'], 409);
+        }
+
+        $started = \App\Support\BackgroundProcess::artisan(['blogkit:update']);
+
+        return response()->json([
+            'ok' => $started,
+            'started' => $started,
+            'message' => $started
+                ? 'Update started (backup → pull → migrate) in the background.'
+                : 'Could not spawn the update process on this host; run `php artisan blogkit:update` over SSH.',
+        ], $started ? 202 : 500);
     }
 }

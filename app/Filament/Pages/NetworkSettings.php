@@ -56,6 +56,7 @@ class NetworkSettings extends Page
 
         $this->form->fill([
             'role' => setting('network.role', config('blogkit.network.role', 'standalone')),
+            'allow_remote_update' => (bool) setting('network.allow_remote_update', true),
             'api_key' => $key,
             'api_secret' => $secret,
         ]);
@@ -78,6 +79,10 @@ class NetworkSettings extends Page
                             ->default('standalone')
                             ->native(false)
                             ->required(),
+                        \Filament\Forms\Components\Toggle::make('allow_remote_update')
+                            ->label('Allow one-click updates from the hub')
+                            ->default(true)
+                            ->helperText('When on, the hub\'s "Update all sites" can trigger this site\'s blogkit:update (backup → pull → migrate). Turn off to update this site only over SSH.'),
                     ]),
                 Section::make('This site\'s credentials')
                     ->description('Paste BOTH values into your hub\'s "Add site" form so it can publish here. The secret is shown so you can copy it; keep it private. Regenerating invalidates the old pair.')
@@ -96,6 +101,7 @@ class NetworkSettings extends Page
         $old = setting('network.role');
 
         Setting::set('network.role', $data['role'] ?? 'standalone');
+        Setting::set('network.allow_remote_update', (bool) ($data['allow_remote_update'] ?? true));
         Cache::forget('settings.network');
 
         AuditLog::create([

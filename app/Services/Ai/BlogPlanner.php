@@ -133,6 +133,12 @@ class BlogPlanner
             // Multisite: which connected sites this article also publishes to
             // ("2,5,34" or "all"). Overrides the batch-level default per row.
             'site_ids' => 'site_ids', 'sites' => 'site_ids', 'site_id' => 'site_ids', 'target_sites' => 'site_ids',
+            // AI thumbnail: generate an image from the title? (yes/no). Optional
+            // per-row custom prompt / style.
+            'generate_image' => 'generate_image', 'gen_image' => 'generate_image', 'create_image' => 'generate_image',
+            'make_image' => 'generate_image', 'thumbnail' => 'generate_image', 'ai_image' => 'generate_image',
+            'image_prompt' => 'image_prompt', 'img_prompt' => 'image_prompt',
+            'image_style' => 'image_style', 'img_style' => 'image_style',
         ];
 
         $handle = fopen($path, 'r');

@@ -96,6 +96,7 @@ class ConnectedSiteResource extends Resource
             ])
             ->recordActions([
                 self::testAction(),
+                self::updateAction(),
                 \Filament\Actions\EditAction::make(),
             ])
             ->toolbarActions([
@@ -118,6 +119,27 @@ class ConnectedSiteResource extends Resource
                     ->title($ok ? 'Connection OK' : 'Connection failed')
                     ->body($message)
                     ->{$ok ? 'success' : 'danger'}()
+                    ->send();
+            });
+    }
+
+    /** Trigger one spoke's self-update (backup → pull → migrate) via the API. */
+    public static function updateAction(): Action
+    {
+        return Action::make('update')
+            ->label('Update')
+            ->icon(Heroicon::OutlinedArrowDownTray)
+            ->color('warning')
+            ->requiresConfirmation()
+            ->modalHeading('Update this site')
+            ->modalDescription('Trigger blogkit:update on this site (it takes a backup first, then pulls and migrates). The site stays online during the update.')
+            ->action(function (ConnectedSite $record): void {
+                \App\Jobs\UpdateSite::dispatch($record->id);
+
+                Notification::make()
+                    ->title('Update triggered')
+                    ->body("{$record->name} is backing up, then updating in the background.")
+                    ->success()
                     ->send();
             });
     }

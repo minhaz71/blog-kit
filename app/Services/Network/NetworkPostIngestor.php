@@ -164,9 +164,12 @@ class NetworkPostIngestor
             return $current; // not a real image — never write arbitrary bytes
         }
 
-        $sha = (string) ($img['sha256'] ?? hash('sha256', $bytes));
         $ext = image_type_to_extension($info[2], false) ?: 'img';
-        $relative = 'network/'.$sha.'.'.$ext; // content-addressed → re-push reuses the same file
+        // SEO-friendly filename from the post slug (not a hash), matching how
+        // the hub names thumbnails, so the image URL stays descriptive on every
+        // site. One post → one file, replaced in place on re-push.
+        $base = Str::slug((string) ($data['slug'] ?? $data['title'] ?? 'thumbnail')) ?: 'thumbnail';
+        $relative = 'network/'.$base.'.'.$ext;
 
         Storage::disk('public')->put($relative, $bytes);
 

@@ -14,6 +14,7 @@ class AiImportBatch extends Model
             'allowed_tags' => 'array',
             'link_catalog' => 'array',
             'network_site_ids' => 'array',
+            'generate_images' => 'boolean',
         ];
     }
 
