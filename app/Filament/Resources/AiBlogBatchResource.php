@@ -104,7 +104,7 @@ class AiBlogBatchResource extends Resource
                         ->options([3 => '3', 5 => '5', 8 => '8', 10 => '10', 15 => '15', 20 => '20'])
                         ->default(5)
                         ->native(false)
-                        ->helperText('Used when the AI plans the cluster (1 pillar + spokes). Ignored when you give titles.'),
+                        ->helperText('Used when the AI plans the cluster (1 pillar + spokes). Ignored when you give titles. In multisite, a separate cluster of this size is planned for EACH site you tick below (deduped against that site\'s own posts).'),
                     Grid::make(2)->schema([
                         TextInput::make('target_country')->label('Target country')->placeholder('United Arab Emirates')->default('United Arab Emirates'),
                         TextInput::make('target_city')->label('Target city')->placeholder('Dubai')->default('Dubai'),

@@ -7,6 +7,7 @@ use App\Models\AiActivityLog;
 use App\Models\AiImportBatch;
 use App\Models\Post;
 use App\Models\Product;
+use App\Services\Network\NetworkTargets;
 
 /**
  * Decides WHAT the blog agent writes.
@@ -32,43 +33,17 @@ class BlogPlanner
     /** @return int number of article items created */
     public function plan(AiImportBatch $batch): int
     {
-        $existingTitles = Post::query()->pluck('title')->map(fn ($t) => mb_strtolower(trim($t)))->all();
+        // User-authored topics (CSV rows or pasted titles) target THIS site by
+        // default and are guarded against it. When there are none, it's niche
+        // mode: the AI designs a SEPARATE cluster for each selected site.
+        $topics = $this->csvRows($batch) ?: $this->givenTitles($batch);
 
-        $topics = $this->csvRows($batch)
-            ?: $this->givenTitles($batch)
-            ?: $this->clusterFromNiche($batch, $existingTitles);
-
-        // Store style rule applies to planned titles/angles too — they feed
-        // straight into article titles and prompts.
-        $topics = ContentReviewer::stripEmDashes($topics);
-
-        // Never write an article the blog already has.
-        $topics = array_values(array_filter(
-            $topics,
-            fn (array $t) => ! in_array(mb_strtolower(trim($t['name'])), $existingTitles, true),
-        ));
-
-        // Ranking-conflict guard (all modes, including CSV and pasted
-        // titles): a reworded near-duplicate of an existing article
-        // cannibalizes it, and a title too close to a PRODUCT or CATEGORY
-        // page would compete with your own money pages. Drops are logged so
-        // nothing disappears silently.
-        $corpus = \App\Models\BlogTopicIdea::conflictCorpus();
-        $topics = array_values(array_filter($topics, function (array $t) use ($corpus, $batch) {
-            $conflict = \App\Models\BlogTopicIdea::rankingConflict((string) $t['name'], $corpus);
-
-            if ($conflict !== null) {
-                AiActivityLog::write($batch->id, null, 'plan',
-                    "✂️ Dropped \"{$t['name']}\" — too similar to \"".mb_substr($conflict, 0, 60).'" (would compete with it in search).', 'warning');
-
-                return false;
-            }
-
-            return true;
-        }));
+        $topics = $topics !== []
+            ? $this->guardLocal($batch, $topics)
+            : $this->clustersPerSite($batch);
 
         if ($topics === []) {
-            throw new \RuntimeException('The plan produced no new topics — every title already exists on the blog (or is too similar to an existing page). Add fresh title ideas or refine the niche.');
+            throw new \RuntimeException('The plan produced no new topics — every title already exists on the target site(s) (or is too similar to an existing page). Add fresh title ideas or refine the niche.');
         }
 
         foreach ($topics as $topic) {
@@ -90,13 +65,151 @@ class BlogPlanner
         $source = match (true) {
             $this->csvRows($batch) !== [] => 'from your CSV briefs',
             $this->givenTitles($batch) !== [] => 'from your title list',
-            default => 'clustered by AI around the niche',
+            default => 'clustered by AI per selected site',
         };
 
         AiActivityLog::write($batch->id, null, 'plan',
             '🧠 Plan ready — '.count($topics)." article(s) {$source}.", 'success');
 
         return count($topics);
+    }
+
+    /**
+     * Dedup + ranking-conflict guard for user-authored topics (CSV rows or
+     * pasted titles), scoped to THIS site: drop any that already exist here,
+     * or — with the store on — that would cannibalize a product/category page.
+     * Drops are logged so nothing disappears silently.
+     *
+     * @param  array<int, array<string, string>>  $topics
+     * @return array<int, array<string, string>>
+     */
+    protected function guardLocal(AiImportBatch $batch, array $topics): array
+    {
+        $existing = array_map(fn ($t) => mb_strtolower(trim($t)), Post::query()->pluck('title')->all());
+
+        // Store style rule applies to planned titles/angles too.
+        $topics = ContentReviewer::stripEmDashes($topics);
+
+        $topics = array_values(array_filter(
+            $topics,
+            fn (array $t) => ! in_array(mb_strtolower(trim($t['name'])), $existing, true),
+        ));
+
+        $corpus = \App\Models\BlogTopicIdea::conflictCorpus();
+
+        return array_values(array_filter($topics, function (array $t) use ($corpus, $batch) {
+            $conflict = \App\Models\BlogTopicIdea::rankingConflict((string) $t['name'], $corpus);
+
+            if ($conflict !== null) {
+                AiActivityLog::write($batch->id, null, 'plan',
+                    "✂️ Dropped \"{$t['name']}\" — too similar to \"".mb_substr($conflict, 0, 60).'" (would compete with it in search).', 'warning');
+
+                return false;
+            }
+
+            return true;
+        }));
+    }
+
+    /**
+     * Niche mode, multisite: design a DISTINCT topic cluster for each selected
+     * site, deduped against THAT site's existing posts, and stamp every article
+     * with its target site so the writer publishes it only there. Off the
+     * network (or local-only), this is a single cluster for this site.
+     *
+     * @return array<int, array<string, string>>
+     */
+    protected function clustersPerSite(AiImportBatch $batch): array
+    {
+        if (! trim((string) $batch->niche)) {
+            throw new \RuntimeException('Give the batch a niche (or a list of title ideas) so the agent knows what to write about.');
+        }
+
+        $plan = NetworkTargets::resolve($batch->network_site_ids);
+
+        $targets = $plan['local'] ? [NetworkTargets::LOCAL] : [];
+        foreach ($plan['sites'] as $id) {
+            $targets[] = (int) $id;
+        }
+        if ($targets === []) {
+            $targets = [NetworkTargets::LOCAL];
+        }
+
+        $all = [];
+
+        foreach ($targets as $target) {
+            $isLocal = $target === NetworkTargets::LOCAL;
+            $existing = $this->existingTitlesFor($target);
+            $existingLower = array_map(fn ($t) => mb_strtolower(trim($t)), $existing);
+            $label = $isLocal ? 'this site' : $this->siteLabel((int) $target);
+
+            try {
+                $cluster = ContentReviewer::stripEmDashes($this->clusterFromNiche($batch, $existing));
+            } catch (\RuntimeException $e) {
+                // One flaky site must not abort the whole batch — log and move on.
+                AiActivityLog::write($batch->id, null, 'plan',
+                    "⚠️ Could not plan for {$label}: ".$e->getMessage(), 'warning');
+
+                continue;
+            }
+
+            // Dedup against this site's own posts.
+            $cluster = array_values(array_filter(
+                $cluster,
+                fn (array $t) => ! in_array(mb_strtolower(trim($t['name'])), $existingLower, true),
+            ));
+
+            // Ranking-conflict guard only where we know the catalog (this site).
+            if ($isLocal) {
+                $corpus = \App\Models\BlogTopicIdea::conflictCorpus();
+                $cluster = array_values(array_filter($cluster, function (array $t) use ($corpus, $batch) {
+                    $conflict = \App\Models\BlogTopicIdea::rankingConflict((string) $t['name'], $corpus);
+
+                    if ($conflict !== null) {
+                        AiActivityLog::write($batch->id, null, 'plan',
+                            "✂️ Dropped \"{$t['name']}\" — too similar to \"".mb_substr($conflict, 0, 60).'" (would compete with it in search).', 'warning');
+
+                        return false;
+                    }
+
+                    return true;
+                }));
+            }
+
+            foreach ($cluster as &$topic) {
+                $topic['site_ids'] = (string) $target;
+            }
+            unset($topic);
+
+            AiActivityLog::write($batch->id, null, 'plan',
+                '🧭 Planned '.count($cluster)." article(s) for {$label}.", 'success');
+
+            $all = array_merge($all, $cluster);
+        }
+
+        return $all;
+    }
+
+    /**
+     * Existing article titles on the given target: local Posts for the `local`
+     * sentinel, or the pulled mirror of a connected site's posts for a spoke ID.
+     *
+     * @return array<string>
+     */
+    protected function existingTitlesFor(int|string $target): array
+    {
+        if ($target === NetworkTargets::LOCAL) {
+            return Post::query()->pluck('title')->all();
+        }
+
+        return \App\Models\NetworkRemotePost::query()
+            ->where('site_id', (int) $target)
+            ->pluck('title')->all();
+    }
+
+    protected function siteLabel(int $siteId): string
+    {
+        return (string) (\App\Models\ConnectedSite::query()->whereKey($siteId)->value('name') ?? "site #{$siteId}");
     }
 
     /**
