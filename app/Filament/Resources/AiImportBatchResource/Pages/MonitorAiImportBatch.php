@@ -92,6 +92,57 @@ class MonitorAiImportBatch extends Page
         \App\Jobs\WriteAiProduct::dispatchSync($item->id);
     }
 
+    /**
+     * Per-site cost breakdown: spend + tokens grouped by the site each article
+     * was written for (item.site_key), plus a "planning" row for the cluster
+     * calls that aren't tied to a single article. Returns [] for a single-site
+     * batch so the panel only appears when it's actually multisite.
+     *
+     * @return array<int, array{label: string, cost: float, tokens: int, articles: int}>
+     */
+    protected function siteSpend(): array
+    {
+        $rows = AiUsageLog::query()
+            ->join('ai_import_items', 'ai_usage_logs.item_id', '=', 'ai_import_items.id')
+            ->where('ai_usage_logs.batch_id', $this->record->id)
+            ->groupBy('ai_import_items.site_key')
+            ->selectRaw('ai_import_items.site_key as site_key,
+                SUM(ai_usage_logs.cost) as cost,
+                SUM(ai_usage_logs.input_tokens + ai_usage_logs.output_tokens) as tokens,
+                COUNT(DISTINCT ai_import_items.id) as articles')
+            ->get();
+
+        // Only worth showing when more than one distinct site is involved.
+        if ($rows->count() < 2 && ! $rows->contains(fn ($r) => ctype_digit((string) $r->site_key))) {
+            return [];
+        }
+
+        $siteNames = \App\Models\ConnectedSite::query()->pluck('name', 'id');
+        $localName = (string) setting('general.site_name', config('app.name'));
+
+        $out = $rows->map(fn ($r) => [
+            'label' => match (true) {
+                $r->site_key === \App\Services\Network\NetworkTargets::LOCAL => "This site — {$localName}",
+                $r->site_key === \App\Services\Network\NetworkTargets::SHARED => 'Shared (multiple sites)',
+                ctype_digit((string) $r->site_key) => (string) ($siteNames[(int) $r->site_key] ?? "Site #{$r->site_key}"),
+                default => 'Unattributed',
+            },
+            'cost' => (float) $r->cost,
+            'tokens' => (int) $r->tokens,
+            'articles' => (int) $r->articles,
+        ])->sortByDesc('cost')->values()->all();
+
+        // Planning calls (no item_id) — one cluster call per site.
+        $planningCost = (float) AiUsageLog::where('batch_id', $this->record->id)->whereNull('item_id')->sum('cost');
+        $planningTokens = (int) AiUsageLog::where('batch_id', $this->record->id)->whereNull('item_id')->sum(\Illuminate\Support\Facades\DB::raw('input_tokens + output_tokens'));
+
+        if ($planningCost > 0) {
+            $out[] = ['label' => 'Planning (all sites)', 'cost' => $planningCost, 'tokens' => $planningTokens, 'articles' => 0];
+        }
+
+        return $out;
+    }
+
     protected function getViewData(): array
     {
         $this->record->refresh();
@@ -137,6 +188,7 @@ class MonitorAiImportBatch extends Page
 
         return [
             'batch' => $this->record,
+            'siteSpend' => $this->siteSpend(),
             'items' => $this->record->items()->orderBy('id')->get(),
             'feed' => AiActivityLog::where('batch_id', $this->record->id)
                 ->latest('id')

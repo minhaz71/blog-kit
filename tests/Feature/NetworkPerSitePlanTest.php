@@ -81,6 +81,12 @@ class NetworkPerSitePlanTest extends TestCase
 
         // 2 fresh per site = 4 items total.
         $this->assertSame(4, $batch->items()->count());
+
+        // Per-site cost attribution key is stamped on every item.
+        $local = $batch->items()->where('site_key', 'local')->count();
+        $spokeItems = $batch->items()->where('site_key', (string) $spoke->id)->count();
+        $this->assertSame(2, $local);
+        $this->assertSame(2, $spokeItems);
     }
 
     public function test_local_only_niche_still_stamps_local(): void

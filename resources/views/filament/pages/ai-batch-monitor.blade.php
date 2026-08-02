@@ -174,6 +174,33 @@
             </div>
         </div>
 
+        {{-- ── Per-site cost (multisite only) ───────────────────────── --}}
+        @if(!empty($siteSpend))
+            <div class="aibm-panel" style="padding: 1.25rem">
+                <p class="aibm-card-label" style="margin-bottom: .75rem">Cost by site</p>
+                <table style="width:100%; border-collapse:collapse; font-size:.875rem">
+                    <thead>
+                        <tr style="text-align:left; color:#6b7280">
+                            <th style="padding:.4rem .5rem">Site</th>
+                            <th style="padding:.4rem .5rem; text-align:right">Articles</th>
+                            <th style="padding:.4rem .5rem; text-align:right">Tokens</th>
+                            <th style="padding:.4rem .5rem; text-align:right">Cost (USD)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($siteSpend as $s)
+                            <tr style="border-top:1px solid #e5e7eb">
+                                <td style="padding:.4rem .5rem; font-weight:600">{{ $s['label'] }}</td>
+                                <td style="padding:.4rem .5rem; text-align:right">{{ $s['articles'] ?: '—' }}</td>
+                                <td style="padding:.4rem .5rem; text-align:right">{{ number_format($s['tokens']) }}</td>
+                                <td style="padding:.4rem .5rem; text-align:right; color:#d97706; font-weight:700">${{ number_format($s['cost'], 4) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+
         {{-- Progress bar --}}
         <div class="aibm-panel" style="padding: 1.25rem">
             <div class="aibm-progress"><div class="aibm-progress-fill" style="width: {{ $batch->progressPercent() }}%"></div></div>

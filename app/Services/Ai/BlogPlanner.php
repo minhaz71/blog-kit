@@ -47,7 +47,12 @@ class BlogPlanner
         }
 
         foreach ($topics as $topic) {
-            $batch->items()->create(['row' => $topic, 'status' => 'pending']);
+            $batch->items()->create([
+                'row' => $topic,
+                'status' => 'pending',
+                // Which site this article was written for → per-site cost.
+                'site_key' => NetworkTargets::siteKey($topic['site_ids'] ?? $batch->network_site_ids),
+            ]);
         }
 
         if (empty($batch->link_catalog)) {

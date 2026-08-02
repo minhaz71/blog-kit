@@ -76,6 +76,18 @@ class NetworkTargetsTest extends TestCase
         $this->assertSame(['local' => true, 'sites' => []], NetworkTargets::resolve('none'));
     }
 
+    public function test_site_key_attributes_cost_to_one_bucket(): void
+    {
+        [$a, $b] = $this->sites();
+
+        $this->assertSame('local', NetworkTargets::siteKey('local'));
+        $this->assertSame('local', NetworkTargets::siteKey(null));
+        $this->assertSame((string) $a->id, NetworkTargets::siteKey((string) $a->id));
+        $this->assertSame('shared', NetworkTargets::siteKey(['local', (string) $a->id]));
+        $this->assertSame('shared', NetworkTargets::siteKey([(string) $a->id, (string) $b->id]));
+        $this->assertSame('shared', NetworkTargets::siteKey('all'));
+    }
+
     public function test_publisher_keeps_post_hidden_when_local_not_selected(): void
     {
         $author = User::create(['name' => 'A', 'email' => 'a@example.com', 'password' => bcrypt('x'), 'is_active' => true]);

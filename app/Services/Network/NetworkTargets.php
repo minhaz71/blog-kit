@@ -77,6 +77,29 @@ class NetworkTargets
         return ['local' => $local, 'sites' => $sites];
     }
 
+    /**
+     * A single grouping key for "which site this article was written for", used
+     * for per-site cost attribution: the `local` sentinel when it's this site
+     * only, the spoke ID when exactly one spoke, or 'shared' when it targets
+     * more than one site (or all).
+     */
+    public const SHARED = 'shared';
+
+    public static function siteKey(mixed $value): string
+    {
+        $r = self::resolve($value);
+
+        if ($r['local'] && $r['sites'] === []) {
+            return self::LOCAL;
+        }
+
+        if (! $r['local'] && count($r['sites']) === 1) {
+            return (string) $r['sites'][0];
+        }
+
+        return self::SHARED;
+    }
+
     /** All active connected-site IDs. */
     public static function activeSiteIds(): array
     {
