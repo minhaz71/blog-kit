@@ -52,6 +52,10 @@ class NetworkController extends Controller
                 'taxonomies.sync' => true,
                 'media.sync' => true,
                 'authors.sync' => true,
+                // This install runs the blog:publish-scheduled cron, so it can
+                // accept a future-dated post and publish it itself at the right
+                // time. Hubs use this to decide push-now vs defer-to-publish.
+                'posts.schedule' => true,
                 'remote.update' => (bool) setting('network.allow_remote_update', true),
             ],
         ]);

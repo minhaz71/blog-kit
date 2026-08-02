@@ -202,8 +202,11 @@ class WriteAiBlogPost implements ShouldQueue
 
         $result = (new \App\Services\Network\NetworkPublisher)->publish($post, $siteIds);
 
+        $deferred = count($result['deferred'] ?? []);
+
         AiActivityLog::write($batch->id, $item->id, 'publish',
             "🌐 Queued \"{$post->title}\" to {$result['queued']} connected site(s)"
+            .($deferred > 0 ? " — {$deferred} will receive it at its scheduled publish time (spoke has no scheduler)" : '')
             .($result['skipped'] !== [] ? ' ('.count($result['skipped']).' inactive skipped)' : '').'.',
             'success');
     }

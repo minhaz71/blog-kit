@@ -15,18 +15,44 @@ class NetworkPublisher
 {
     /**
      * @param  array<int>  $siteIds  connected-site IDs ("all" resolved by the caller)
-     * @return array{queued: int, sites: array<int>, skipped: array<int>}
+     * @return array{queued: int, sites: array<int>, skipped: array<int>, deferred: array<int>}
      */
     public function publish(Post $post, array $siteIds): array
     {
-        $active = ConnectedSite::query()->active()->whereIn('id', $siteIds)->pluck('id')->all();
-        $skipped = array_values(array_diff(array_map('intval', $siteIds), $active));
+        $active = ConnectedSite::query()->active()->whereIn('id', $siteIds)->get();
+        $skipped = array_values(array_diff(array_map('intval', $siteIds), $active->pluck('id')->all()));
 
-        foreach ($active as $siteId) {
-            PushPostToSite::dispatch($post->id, (int) $siteId);
+        // A future-dated post: capable spokes (they run the publish-scheduled
+        // cron) receive it now AS scheduled and publish themselves at the right
+        // time — resilient even if the hub is offline then. Spokes that don't
+        // advertise the capability can't be trusted to flip it, so we DEFER the
+        // push until publish time and send it already-published.
+        $scheduled = $post->status === 'scheduled' && $post->published_at?->isFuture();
+        $deferred = [];
+
+        foreach ($active as $site) {
+            if ($scheduled && ! self::spokeHonorsSchedule($site)) {
+                PushPostToSite::dispatch($post->id, $site->id)->delay($post->published_at);
+                $deferred[] = $site->id;
+
+                continue;
+            }
+
+            PushPostToSite::dispatch($post->id, $site->id);
         }
 
-        return ['queued' => count($active), 'sites' => $active, 'skipped' => $skipped];
+        return [
+            'queued' => $active->count(),
+            'sites' => $active->pluck('id')->all(),
+            'skipped' => $skipped,
+            'deferred' => $deferred,
+        ];
+    }
+
+    /** Does this spoke run its own scheduled-publish cron (per its last handshake)? */
+    public static function spokeHonorsSchedule(ConnectedSite $site): bool
+    {
+        return ($site->capabilities['posts.schedule'] ?? false) === true;
     }
 
     /**
