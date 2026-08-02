@@ -54,7 +54,20 @@ class ConnectedSiteResource extends Resource
                     TextInput::make('name')->required()->maxLength(255)
                         ->helperText('A label for this site in your dashboard.'),
                     TextInput::make('base_url')->label('Base URL')->required()->url()
-                        ->helperText('The site root, e.g. https://site2.example.com')
+                        ->helperText('The site root, e.g. https://site2.example.com. HTTPS is required (http is allowed only for localhost) so credentials and content never travel in cleartext.')
+                        ->rule(static function () {
+                            return static function (string $attribute, $value, \Closure $fail): void {
+                                $scheme = strtolower((string) parse_url((string) $value, PHP_URL_SCHEME));
+                                $host = strtolower((string) parse_url((string) $value, PHP_URL_HOST));
+                                $isLocal = in_array($host, ['localhost', '127.0.0.1', '::1'], true)
+                                    || str_ends_with($host, '.localhost')
+                                    || str_ends_with($host, '.test');
+
+                                if ($scheme !== 'https' && ! $isLocal) {
+                                    $fail('Use https:// for a connected site (http is only allowed for localhost).');
+                                }
+                            };
+                        })
                         ->columnSpanFull(),
                 ]),
             Section::make('Credentials')

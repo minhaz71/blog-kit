@@ -56,7 +56,7 @@ class NetworkController extends Controller
                 // accept a future-dated post and publish it itself at the right
                 // time. Hubs use this to decide push-now vs defer-to-publish.
                 'posts.schedule' => true,
-                'remote.update' => (bool) setting('network.allow_remote_update', true),
+                'remote.update' => (bool) setting('network.allow_remote_update', false),
             ],
         ]);
     }
@@ -167,7 +167,7 @@ class NetworkController extends Controller
      */
     public function update(Request $request): JsonResponse
     {
-        if (! (bool) setting('network.allow_remote_update', true)) {
+        if (! (bool) setting('network.allow_remote_update', false)) {
             return response()->json(['ok' => false, 'error' => 'Remote updates are disabled on this site.'], 403);
         }
 

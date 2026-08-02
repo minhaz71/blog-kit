@@ -45,9 +45,10 @@ class VerifyNetworkSignature
             return $this->deny('Stale or invalid timestamp.');
         }
 
-        // Signature.
+        // Signature — covers method, path, body AND the (canonicalized) query.
         $body = $request->getContent();
-        if (! NetworkSignature::verify($ourSecret, $request->method(), $request->path(), $timestamp, $nonce, $body, $signature)) {
+        $query = NetworkSignature::canonicalQuery($request->query());
+        if (! NetworkSignature::verify($ourSecret, $request->method(), $request->path(), $timestamp, $nonce, $body, $signature, $query)) {
             return $this->deny('Bad signature.');
         }
 

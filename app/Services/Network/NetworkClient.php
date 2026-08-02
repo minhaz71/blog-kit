@@ -38,8 +38,8 @@ class NetworkClient
         $fullPath = 'api/v1/network/'.ltrim($path, '/');
         $payload = $body === [] ? '' : json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        // The signature covers the path + body (not the query string); the
-        // spoke verifies against $request->path(), which excludes the query.
+        // The signature covers the path, body AND the query string (GET filter
+        // params), so nothing in the request can be tampered with in transit.
         $headers = NetworkSignature::headers(
             key: (string) $site->api_key,
             secret: (string) $site->api_secret,
@@ -48,6 +48,7 @@ class NetworkClient
             body: $payload,
             nonce: Str::random(32),
             now: time(),
+            query: $method === 'GET' ? $query : [],
         );
 
         try {
