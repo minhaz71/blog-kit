@@ -8,7 +8,7 @@ use PDO;
 /**
  * Builds the manifest.json embedded in every backup archive. The manifest
  * is what makes a backup PORTABLE and SAFE to restore: it records exactly
- * what environment produced it (PHP / Laravel / ShopKit / DB versions, the
+ * what environment produced it (PHP / Laravel / Hemdox BlogKit / DB versions, the
  * ran-migrations list, row counts, checksums) so BackupCompatibility can
  * verify a target machine BEFORE anything is overwritten.
  */
@@ -17,7 +17,7 @@ class BackupManifest
     /** Bump when the manifest structure changes incompatibly. */
     public const FORMAT = 1;
 
-    /** PHP extensions ShopKit needs at runtime — presence is recorded and re-checked on restore. */
+    /** PHP extensions Hemdox BlogKit needs at runtime — presence is recorded and re-checked on restore. */
     public const REQUIRED_EXTENSIONS = ['pdo_mysql', 'zip', 'mbstring', 'openssl', 'curl', 'gd', 'json'];
 
     /** @param  array{database?: ?string, storage_public?: bool, ai_imports?: bool}  $includes */

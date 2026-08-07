@@ -1,6 +1,6 @@
 # Backups & Data-Loss Protection
 
-How ShopKit protects your database from accidental wipes, takes daily backups, and ships them to
+How Hemdox BlogKit protects your database from accidental wipes, takes daily backups, and ships them to
 free cloud storage. Read this once, do the ~10-minute cloud setup, and you're covered.
 
 ---
@@ -24,7 +24,7 @@ $ php artisan migrate:fresh
 - Implementation: `app/Support/DatabaseSafetyGuard.php`, registered in `AppServiceProvider::boot()`.
 - Skipped automatically during the test suite (tests use in-memory SQLite).
 - **Escape hatch** (only when you knowingly want to skip, e.g. first-run setup on an empty DB):
-  `SHOPKIT_ALLOW_UNSAFE_WIPE=1 php artisan migrate:fresh`.
+  `BLOGKIT_ALLOW_UNSAFE_WIPE=1 php artisan migrate:fresh` (legacy `SHOPKIT_ALLOW_UNSAFE_WIPE=1` still works).
 
 > **Golden rule:** on a database with real data, never run `migrate:fresh`/`db:wipe`. Use
 > `php artisan migrate` — it only applies *new* migrations and never drops existing tables/data.
@@ -34,7 +34,7 @@ $ php artisan migrate:fresh
 ## 2. Backup commands — portable snapshots with a compatibility gate
 
 Every archive is **self-describing**: it embeds a `manifest.json` recording the environment that
-produced it (PHP / Laravel / ShopKit / MySQL versions, required PHP extensions, the full
+produced it (PHP / Laravel / Hemdox BlogKit / MySQL versions, required PHP extensions, the full
 ran-migrations list, row counts, an APP_KEY fingerprint, and a SHA-256 checksum of the dump).
 The dump carries the **complete schema + data**, so restoring **never needs migrations** — a full
 snapshot rebuilds the site as-is (products, orders, AI batches/usage, API keys, every setting).
@@ -51,12 +51,12 @@ snapshot rebuilds the site as-is (products, orders, AI batches/usage, API keys, 
 
 **The compatibility gate blocks the restore** (before anything is touched) when: the archive is
 corrupt (checksum mismatch) · target PHP is older than the backup's · a required PHP extension is
-missing · Laravel major is older · the backup came from a **newer ShopKit** or contains migrations
+missing · Laravel major is older · the backup came from a **newer Hemdox BlogKit** or contains migrations
 this codebase doesn't know · DB driver differs · no `mysql` client. It **warns** on: newer
 PHP/Laravel · older MySQL major · a different APP_KEY (encrypted columns won't decrypt).
 
 Admin UI (`Admin → System → Backups`): **Back up now** buttons, per-row **Download / Check /
-Restore / Delete**, and **Import backup file** — upload a zip from any other ShopKit server; it is
+Restore / Delete**, and **Import backup file** — upload a zip from any other Hemdox BlogKit server; it is
 checked and restored in one step.
 
 Dumps use `--single-transaction --set-gtid-purged=OFF --no-tablespaces --routines --triggers
@@ -115,7 +115,7 @@ rclone lsd gdrive:            # lists your Drive folders — confirms auth works
 
 ```bash
 cd "/Users/minhaz/ecommerce site"
-rclone copy storage/app/backups "gdrive:TereaHub-Backups" --progress
+rclone copy storage/app/backups "gdrive:BlogKit-Backups" --progress
 ```
 
 **Automate it — just set two env values.** The daily upload + cloud retention is already wired
@@ -123,14 +123,14 @@ rclone copy storage/app/backups "gdrive:TereaHub-Backups" --progress
 at a remote. Add to `.env`:
 
 ```dotenv
-BACKUP_CLOUD_REMOTE="gdrive:TereaHub-Backups"   # rclone remote:folder
+BACKUP_CLOUD_REMOTE="gdrive:BlogKit-Backups"   # rclone remote:folder
 BACKUP_CLOUD_RETAIN_DAYS=30                      # delete cloud copies older than this
 ```
 
 That's it. From then on, every night:
 
 1. `backup:run` writes the day's archive to `storage/app/backups` (DB daily, full weekly).
-2. `backup:cloud-sync` uploads new archives to `gdrive:TereaHub-Backups` **and deletes cloud copies
+2. `backup:cloud-sync` uploads new archives to `gdrive:BlogKit-Backups` **and deletes cloud copies
    older than `BACKUP_CLOUD_RETAIN_DAYS`** — so old backups are pruned automatically off-machine too.
 
 Run it by hand any time to check:
@@ -194,7 +194,7 @@ php artisan tinker --execute='echo App\Models\Product::count();'   # sanity chec
 
 To restore on a **fresh machine**: install the app, `php artisan migrate`, copy a backup zip into
 `storage/app/backups/`, then `php artisan backup:restore --path=backups/<file>.zip`. Download the
-latest from Drive first: `rclone copy gdrive:ShopKit-Backups storage/app/backups`.
+latest from Drive first: `rclone copy gdrive:BlogKit-Backups storage/app/backups`.
 
 ---
 

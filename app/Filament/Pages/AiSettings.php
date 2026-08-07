@@ -47,6 +47,7 @@ class AiSettings extends Page
             'anthropic_api_key', 'anthropic_model', 'anthropic_extra_models',
             'openai_api_key', 'openai_model', 'openai_extra_models',
             'gemini_api_key', 'gemini_model', 'gemini_extra_models',
+            'fal_api_key',
             'google_drive_api_key',
             'image_provider', 'image_model', 'image_size', 'image_quality', 'image_style',
             'default_system_prompt',
@@ -136,38 +137,55 @@ class AiSettings extends Page
             Section::make('AI thumbnail images')
                 ->icon(\Filament\Support\Icons\Heroicon::OutlinedPhoto)
                 ->iconColor('success')
-                ->description(new HtmlString('Generate a blog thumbnail from the article title with ONE image request (no revision). Uses the API key of the selected provider above. <strong>Recommended: OpenAI gpt-image-1.</strong>'))
+                ->description(new HtmlString('Generate a blog featured image from the article title, excerpt and category with ONE image request (no revision). <strong>Lowest cost: fal.ai FLUX.1 schnell</strong> (about $0.003 per image, a few seconds). OpenAI gpt-image-1 has the best prompt adherence; Google Gemini Flash Image is a cheap middle ground.'))
                 ->columns(2)
                 ->schema([
+                    TextInput::make('fal_api_key')
+                        ->password()->revealable()
+                        ->label('fal.ai API key')
+                        ->helperText(new HtmlString('For FLUX / SDXL. Get one at <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener" class="underline text-primary-600">fal.ai → keys</a>. OpenAI / Gemini reuse the keys above.'))
+                        ->columnSpanFull(),
                     \Filament\Forms\Components\Select::make('image_provider')
-                        ->label('Image provider / model')
+                        ->label('Image provider')
                         ->options(\App\Services\Ai\ImageGenerator::PROVIDER_LABELS)
-                        ->default('openai')
+                        ->default('fal')
                         ->native(false)
-                        ->helperText('Uses that provider\'s API key set above.'),
-                    TextInput::make('image_model')
-                        ->label('Model id (optional)')
-                        ->placeholder('gpt-image-1')
-                        ->helperText('Leave blank for the provider default (gpt-image-1 / imagen-3.0-generate-002).'),
+                        ->live()
+                        ->afterStateUpdated(fn ($set) => $set('image_model', null))
+                        ->helperText('Uses that provider\'s API key.'),
+                    \Filament\Forms\Components\Select::make('image_model')
+                        ->label('Model')
+                        ->options(fn ($get): array => \App\Services\Ai\ImageGenerator::MODELS[$get('image_provider') ?: 'fal'] ?? [])
+                        ->native(false)
+                        ->searchable()
+                        ->placeholder('Provider default')
+                        ->helperText('Leave blank for the provider default.'),
+                    \Filament\Forms\Components\Select::make('image_style')
+                        ->label('Default style')
+                        ->options([
+                            'editorial' => 'Editorial — flat vector illustration',
+                            'photographic' => 'Photographic — realistic photo',
+                            '3d' => '3D — soft render',
+                            'minimal' => 'Minimal — lots of space',
+                            'isometric' => 'Isometric — clean geometry',
+                        ])
+                        ->default('editorial')
+                        ->native(false)
+                        ->helperText('A per-post style overrides this.'),
                     \Filament\Forms\Components\Select::make('image_size')
                         ->label('Size')
                         ->options([
-                            '1536x1024' => 'Landscape 1536×1024 (thumbnail)',
+                            '1536x1024' => 'Landscape 1536×1024 (recommended)',
                             '1024x1024' => 'Square 1024×1024',
                             '1024x1536' => 'Portrait 1024×1536',
                         ])
                         ->default('1536x1024')
                         ->native(false),
                     \Filament\Forms\Components\Select::make('image_quality')
-                        ->label('Quality (OpenAI)')
+                        ->label('Quality (OpenAI gpt-image-1)')
                         ->options(['low' => 'Low (cheapest)', 'medium' => 'Medium', 'high' => 'High'])
                         ->default('medium')
                         ->native(false),
-                    \Filament\Forms\Components\TextInput::make('image_style')
-                        ->label('Default style')
-                        ->placeholder('modern flat editorial illustration, soft lighting')
-                        ->helperText('Appended to the title-based prompt. A per-batch or per-row style overrides this.')
-                        ->columnSpanFull(),
                 ]),
             Section::make('Google Drive')
                 ->icon(\Filament\Support\Icons\Heroicon::OutlinedPhoto)

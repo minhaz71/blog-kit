@@ -1,6 +1,6 @@
-# ShopKit — Database Guide
+# Hemdox BlogKit — Database Guide
 
-> Complete reference to the ShopKit database so any developer can understand the schema, how the
+> Complete reference to the Hemdox BlogKit database so any developer can understand the schema, how the
 > tables relate, and where each domain lives. Generated from the **live MySQL schema** (accurate to
 > the current migrations), then annotated by hand. Pairs with [PROJECT.md](../PROJECT.md) (app
 > architecture) and [docs/AI-PUBLISHER.md](AI-PUBLISHER.md) (AI agent).

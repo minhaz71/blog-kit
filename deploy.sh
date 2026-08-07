@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# ── Terea Hub / ShopKit production update ────────────────────────────
+# ── Hemdox BlogKit production update ─────────────────────────────────
 # Run from the project root on the server:  bash deploy.sh
 #
-# Thin wrapper around the safe updater. `shopkit:update`:
+# Thin wrapper around the safe updater. `blogkit:update`:
 #   1. runs the production-readiness pre-flight,
 #   2. takes a FULL backup (database + files) as a restore point,
 #   3. enters maintenance mode,
@@ -14,7 +14,7 @@
 # additive only (destructive ones are blocked in production).
 set -euo pipefail
 
-php artisan shopkit:update "$@"
+php artisan blogkit:update "$@"
 
 echo
 echo "✓ Done. If you use page/LiteSpeed/Cloudflare caching, click 'Purge All'"

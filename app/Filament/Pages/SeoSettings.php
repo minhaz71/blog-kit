@@ -107,17 +107,20 @@ class SeoSettings extends Page
                         ->helperText('On = every page sends noindex and robots.txt blocks everything. Turn OFF before you want to rank.'),
                 ]),
             Section::make('Permalinks')
-                ->description('URL bases for product, category and blog pages. Leave the defaults to keep today\'s URLs. Change a base to reshape the URLs — existing links auto-redirect (301) to the new ones. Product and category bases may be left blank for root-level URLs (e.g. /amber-kazakhstan); the blog base must stay set.')
+                ->description('URL bases for your pages. Leave the defaults to keep today\'s URLs. Change a base to reshape the URLs — existing links auto-redirect (301) to the new ones. The blog base must stay set.')
                 ->columns(3)
                 ->schema([
+                    // Store-only: hidden while the ecommerce module is off.
                     TextInput::make('product_base')
                         ->label('Product base')
                         ->placeholder('product')
-                        ->helperText(fn ($state): string => '/'.trim(($state ?: 'product'), '/').'/your-product'),
+                        ->helperText(fn ($state): string => '/'.trim(($state ?: 'product'), '/').'/your-product')
+                        ->visible(fn () => ecommerce_enabled()),
                     TextInput::make('category_base')
                         ->label('Category base')
                         ->placeholder('category')
-                        ->helperText(fn ($state): string => '/'.trim(($state ?: 'category'), '/').'/your-category'),
+                        ->helperText(fn ($state): string => '/'.trim(($state ?: 'category'), '/').'/your-category')
+                        ->visible(fn () => ecommerce_enabled()),
                     TextInput::make('blog_base')
                         ->label('Blog base')
                         ->placeholder('blog')

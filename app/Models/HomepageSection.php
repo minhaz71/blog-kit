@@ -22,6 +22,7 @@ class HomepageSection extends Model
         'cta' => 'Call to action',
         'newsletter' => 'Newsletter signup',
         'blog_posts' => 'Latest blog posts',
+        'post_categories' => 'Browse by topic (blog categories)',
         'text_block' => 'Rich text block',
     ];
 

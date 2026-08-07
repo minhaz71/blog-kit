@@ -77,6 +77,8 @@ class GeneralSettings extends Page
                 Section::make('Selling locations')
                     ->description('WooCommerce-style: choose where you sell. Checkout only offers these countries — with a single country, customers see it locked and cannot change it.')
                     ->columns(2)
+                    // Store-only: hidden while the ecommerce module is off (blog mode).
+                    ->visible(fn () => ecommerce_enabled())
                     ->schema([
                         Select::make('sell_to_mode')
                             ->label('Sell to')
@@ -99,6 +101,8 @@ class GeneralSettings extends Page
                 Section::make('Locale & currency')
                     ->columns(2)
                     ->schema([
+                        // Currency fields are store-only: hidden while the ecommerce
+                        // module is off. Timezone stays (it is a general setting).
                         Select::make('currency')
                             ->options([
                                 'AED' => 'UAE Dirham (AED)', 'USD' => 'US Dollar (USD)', 'EUR' => 'Euro (EUR)',
@@ -109,10 +113,12 @@ class GeneralSettings extends Page
                                 'CNY' => 'Chinese Yuan (CNY)', 'TRY' => 'Turkish Lira (TRY)', 'RUB' => 'Russian Ruble (RUB)',
                             ])
                             ->searchable()
-                            ->required(),
+                            ->required()
+                            ->visible(fn () => ecommerce_enabled()),
                         TextInput::make('currency_symbol')
                             ->label('Currency display text')
-                            ->helperText('Exactly what customers see next to prices — write anything: "AED", "د.إ", "$"…'),
+                            ->helperText('Exactly what customers see next to prices — write anything: "AED", "د.إ", "$"…')
+                            ->visible(fn () => ecommerce_enabled()),
                         Select::make('currency_decimals')
                             ->label('Price decimals')
                             ->options([
@@ -122,12 +128,14 @@ class GeneralSettings extends Page
                                 3 => '3 (e.g. 30.000)',
                             ])
                             ->default(2)
-                            ->native(false),
+                            ->native(false)
+                            ->visible(fn () => ecommerce_enabled()),
                         Select::make('currency_position')
                             ->label('Symbol position')
                             ->options(['left' => 'Before the amount (AED 30)', 'right' => 'After the amount (30 AED)'])
                             ->default('left')
-                            ->native(false),
+                            ->native(false)
+                            ->visible(fn () => ecommerce_enabled()),
                         TextInput::make('timezone')->default('UTC'),
                     ]),
                 Section::make('Support contact')

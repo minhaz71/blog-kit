@@ -17,7 +17,7 @@ use ZipArchive;
  *   storage-public/**  uploaded files (product images, media)     [files/full]
  *   ai-imports/**      AI Product Publisher source CSVs           [files/full]
  *
- * The manifest is what lets backup:restore verify PHP/Laravel/ShopKit/DB
+ * The manifest is what lets backup:restore verify PHP/Laravel/Hemdox BlogKit/DB
  * compatibility on the target machine BEFORE anything is overwritten.
  */
 class BackupRunCommand extends Command

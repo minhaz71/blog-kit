@@ -10,7 +10,7 @@ use Illuminate\Console\Command;
  * so it doubles as a gate (`blogkit:update` runs it first, and it can be a
  * deploy pipeline step).
  */
-class ShopkitPreflight extends Command
+class BlogkitPreflight extends Command
 {
     protected $signature = 'blogkit:preflight';
 

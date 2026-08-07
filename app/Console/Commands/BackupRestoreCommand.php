@@ -13,7 +13,7 @@ use ZipArchive;
 /**
  * Full restore with a compatibility gate. Order of operations:
  *
- *   1. COMPATIBILITY CHECK (PHP/Laravel/ShopKit/DB versions, extensions,
+ *   1. COMPATIBILITY CHECK (PHP/Laravel/Hemdox BlogKit/DB versions, extensions,
  *      migration lineage, archive checksum, APP_KEY) — errors BLOCK the
  *      restore unless --skip-checks is passed.
  *   2. Safety backup of the CURRENT database (so a restore is undoable).
@@ -33,7 +33,7 @@ class BackupRestoreCommand extends Command
         {--no-safety-backup : Skip the automatic pre-restore backup of the current database}
         {--force : Skip the confirmation prompt}';
 
-    protected $description = 'Restore a ShopKit backup archive (database + files) after verifying compatibility.';
+    protected $description = 'Restore a Hemdox BlogKit backup archive (database + files) after verifying compatibility.';
 
     public function handle(): int
     {

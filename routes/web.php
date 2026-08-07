@@ -141,6 +141,14 @@ Route::post('/wishlist/{product}', [WishlistController::class, 'toggle'])->middl
 Route::post('/products/{product}/reviews', [ReviewController::class, 'store'])->middleware(['throttle:reviews', 'ecommerce'])->name('reviews.store');
 Route::post('/newsletter', [NewsletterController::class, 'subscribe'])->middleware('throttle:newsletter')->name('newsletter.subscribe');
 
+// Fresh CSRF token for this session. Guest pages are served from the full-page
+// cache with another visitor's token baked in; the frontend fetches this once
+// on load and swaps every token on the page so forms never 419 on cached HTML.
+// Always available (independent of the store's /cart/count endpoint), so a
+// blog install keeps working forms without loading any ecommerce route.
+// Returns JSON, so it is never itself stored by the page cache.
+Route::get('/csrf-token', fn () => response()->json(['token' => csrf_token()]))->name('csrf.token');
+
 // ── Blog ───────────────────────────────────────────────────────────
 // The blog base is renameable (Admin → SEO settings, default "blog"); its
 // index/category/author sub-routes mean it always keeps a non-empty prefix.

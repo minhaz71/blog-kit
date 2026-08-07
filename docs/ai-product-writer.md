@@ -1,5 +1,9 @@
 # AI Product Writer — Workflow & Feature Specification
 
+> **Scope:** this document covers the **optional ecommerce module** (retained in the codebase but
+> shipped DISABLED behind `ecommerce_enabled()` / `BLOGKIT_ECOMMERCE_ENABLED`). It applies only when
+> the store module is enabled. For the always-on blog pipeline, see [ai-blog-writer.md](ai-blog-writer.md).
+
 Portable specification of the product content-writing agent, written for re-implementation
 on any platform (e.g. a WordPress plugin). Describes behavior and contracts, not
 framework code.

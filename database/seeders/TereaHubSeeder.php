@@ -10,10 +10,12 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Terea Hub brand setup: store identity, theme colors, TEREA categories,
- * and the full homepage layout. Everything it writes lives in the database
- * and stays editable from the admin (Homepage sections, Appearance,
- * Navigation, General settings). Safe to re-run.
+ * Optional ecommerce module — sample store setup: store identity, theme colors,
+ * demo categories, and the full homepage layout. This seeder only runs when the
+ * ecommerce module is enabled; the sample brand/product data below is
+ * illustrative demo content, not the app's own identity. Everything it writes
+ * lives in the database and stays editable from the admin (Homepage sections,
+ * Appearance, Navigation, General settings). Safe to re-run.
  */
 class TereaHubSeeder extends Seeder
 {

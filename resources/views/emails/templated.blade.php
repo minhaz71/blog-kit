@@ -259,7 +259,7 @@
                     <tr><td class="em-pad" style="background:#ffffff; padding:16px 36px 6px;">
                         <div style="background:#fff7ed; border-radius:12px; padding:20px 22px; text-align:center;">
                             <div style="font-size:18px; font-weight:800; color:#0f172a;">{{ setting('emails.promo_heading', 'Free delivery on your next order') }}</div>
-                            <p style="margin:6px 0 14px; font-size:13px; color:#64748b;">{{ setting('emails.promo_text', 'Come back soon — genuine IQOS TEREA, delivered fast across the UAE.') }}</p>
+                            <p style="margin:6px 0 14px; font-size:13px; color:#64748b;">{{ setting('emails.promo_text', 'Thanks for reading — fresh articles and guides, straight to your inbox.') }}</p>
                             <table role="presentation" cellpadding="0" cellspacing="0" style="display:inline-block;">
                                 <tr><td style="border-radius:10px; background:{{ $brand }};">
                                     <a href="{{ $b['url'] }}" style="display:inline-block; padding:11px 24px; font-size:14px; font-weight:700; color:#ffffff; text-decoration:none; border-radius:10px;">{{ setting('emails.promo_cta', 'Shop Now') }}</a>

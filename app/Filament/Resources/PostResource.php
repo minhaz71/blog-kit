@@ -87,6 +87,12 @@ class PostResource extends Resource
                                 : null),
                         TextInput::make('reading_time')->numeric()->default(3)->suffix('min'),
                         Toggle::make('show_toc')->label('Show table of contents')->default(true),
+                        Select::make('post_style')
+                            ->label('Layout style')
+                            ->options(\App\Support\PostStyle::options())
+                            ->placeholder('Use site default (Appearance settings)')
+                            ->native(false)
+                            ->helperText('Override the single-post layout for just this post.'),
                     ]),
                 ]),
                 Tab::make('SEO')->schema(SeoForm::components()),
@@ -208,10 +214,31 @@ class PostResource extends Resource
             ->icon(\Filament\Support\Icons\Heroicon::OutlinedPhoto)
             ->color('gray')
             ->visible(fn (): bool => \App\Services\Ai\ImageGenerator::isConfigured())
-            ->requiresConfirmation()
-            ->modalDescription('Generate an AI thumbnail from this post\'s title (one image request) and set it as the featured image. If the post is published to other sites, they will be updated too.')
-            ->action(function (Post $record): void {
-                \App\Jobs\GenerateThumbnailJob::dispatch($record->id);
+            ->modalDescription('Generate an AI featured image from this post\'s title, excerpt and category (one image request). If the post is published to other sites, they will be updated too.')
+            ->modalSubmitActionLabel('Generate')
+            ->schema([
+                \Filament\Forms\Components\Select::make('style')
+                    ->label('Style')
+                    ->options([
+                        'editorial' => 'Editorial — flat vector illustration',
+                        'photographic' => 'Photographic — realistic photo',
+                        '3d' => '3D — soft render',
+                        'minimal' => 'Minimal — lots of space',
+                        'isometric' => 'Isometric — clean geometry',
+                    ])
+                    ->default(fn () => setting('ai.image_style', 'editorial'))
+                    ->native(false),
+                \Filament\Forms\Components\Textarea::make('custom')
+                    ->label('Custom prompt (optional)')
+                    ->rows(2)
+                    ->placeholder('Leave blank to auto-generate from the title, excerpt and category.')
+                    ->helperText('If set, this describes the image directly. The chosen style is still applied.'),
+            ])
+            ->action(function (array $data, Post $record): void {
+                \App\Jobs\GenerateThumbnailJob::dispatch($record->id, array_filter([
+                    'style' => $data['style'] ?? null,
+                    'custom' => $data['custom'] ?? null,
+                ]));
                 \Filament\Notifications\Notification::make()
                     ->title('Generating thumbnail…')
                     ->body('It will appear on the post shortly (needs a running queue worker).')

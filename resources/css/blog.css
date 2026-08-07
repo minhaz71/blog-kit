@@ -392,6 +392,72 @@
     .bd-toc__item--3 > a { margin-left: 0.85rem; }
 }
 
+/* ── TOC style variants (App\Support\TocStyle) ─────────────────────────
+   Modifier classes on .bd-toc; theme-aware via the --brand* variables. */
+
+/* Plain: no card, simple list. */
+.bd-toc--plain { border: 0; background: none; padding: 0; }
+
+/* Left accent bar: card chrome dropped, thick brand rail on the left. */
+.bd-toc--bordered {
+    border: 0; background: none; border-radius: 0;
+    padding: 0.25rem 0 0.25rem 1.1rem;
+    border-left: 3px solid var(--brand);
+}
+
+/* Numbered: circled brand counters on the h2 items. */
+.bd-toc--numbered .bd-toc__item--2 > a::before {
+    content: counter(bd-toc);
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.5rem; height: 1.5rem; min-width: 0; margin-right: 0.55rem;
+    border-radius: 999px; background: var(--brand); color: var(--brand-fg, #fff);
+    font-size: 0.72rem; font-weight: 800;
+}
+.bd-toc--numbered .bd-toc__item--2 > a { display: flex; align-items: center; }
+
+/* Pills: items become inline chips. */
+.bd-toc--pills .bd-toc__list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.bd-toc--pills .bd-toc__item--2 > a::before { content: none; }
+.bd-toc--pills .bd-toc__list a {
+    border: 1px solid var(--brand-ring, #99f6e4);
+    background: #fff; border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.85rem;
+}
+.bd-toc--pills .bd-toc__item--3 > a { margin-left: 0; border-left: 0; padding-left: 0.8rem; }
+.bd-toc--pills .bd-toc__list a:hover { background: var(--brand-tint, #f0fdfa); }
+
+/* Brand: solid brand-tinted card with a stronger header. */
+.bd-toc--brand {
+    border-color: transparent;
+    background: var(--brand-tint, #f0fdfa);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 20%, transparent);
+}
+.bd-toc--brand .bd-toc__title { color: var(--brand-strong); }
+
+/* Underlined rows: no card, each row separated by a hairline. */
+.bd-toc--underline { border: 0; background: none; padding: 0; }
+.bd-toc--underline .bd-toc__list a { border-radius: 0; border-bottom: 1px solid #eef2f7; }
+.bd-toc--underline .bd-toc__list li:last-child a { border-bottom: 0; }
+
+/* Compact: dense and small. */
+.bd-toc--compact { padding: 0.75rem 0.9rem; }
+.bd-toc--compact .bd-toc__list a { padding: 0.2rem 0.4rem; font-size: 0.85rem; }
+.bd-toc--compact .bd-toc__title { margin-bottom: 0.35rem; }
+
+/* Callout: thick brand left border, warm feel. */
+.bd-toc--callout {
+    border: 1px solid #eef2f7; border-left: 4px solid var(--brand);
+    background: #fff;
+}
+
+/* Ruled: no side card, framed top and bottom by rules. */
+.bd-toc--ruled {
+    border: 0; border-top: 2px solid var(--brand); border-bottom: 2px solid var(--brand);
+    border-radius: 0; background: none; padding: 0.9rem 0;
+}
+
+/* Sidebar variant (used by the sidebar post layouts): light, no chrome. */
+.bd-toc--side { border: 0; background: none; padding: 0; margin: 0; }
+
 /* ── Affiliate content: CTA button + disclosure ─────────────────────── */
 .bd-article a.bd-affiliate-btn {
     display: inline-block;

@@ -2,10 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "shopkit",
+      "name": "blogkit",
       "runtimeExecutable": "php",
-      "runtimeArgs": ["artisan", "serve", "--port=8000"],
-      "port": 8000
+      "runtimeArgs": ["artisan", "serve", "--port=8010"],
+      "port": 8010,
+      "url": "http://127.0.0.1:8010"
     }
   ]
 }

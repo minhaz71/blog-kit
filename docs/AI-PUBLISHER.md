@@ -1,5 +1,9 @@
 # AI Product Publisher — Developer Guide
 
+> **Scope:** this document covers the **optional ecommerce module** (retained in the codebase but
+> shipped DISABLED behind `ecommerce_enabled()` / `BLOGKIT_ECOMMERCE_ENABLED`). It applies only when
+> the store module is enabled. For the always-on blog pipeline, see [ai-blog-writer.md](ai-blog-writer.md).
+
 > Complete reference for the bulk AI product-writing agent: architecture, every class and model,
 > the pipeline step by step, statuses, settings, security, and how to customize or debug it.
 > Read [PROJECT.md](../PROJECT.md) first for overall project orientation.

@@ -46,6 +46,13 @@ class AppearanceSettings extends Page
     protected function keys(): array
     {
         return [
+            'theme',
+            'header_style',
+            'footer_style',
+            'home_style',
+            'blog_index_style',
+            'blog_post_style',
+            'toc_style',
             'favicon',
             'primary_color', 'primary_hover_color', 'sale_badge_color',
             'border_radius', 'card_shadow', 'card_add_to_cart',
@@ -66,6 +73,59 @@ class AppearanceSettings extends Page
     public function form(Schema $schema): Schema
     {
         return $schema->components([
+            Section::make('Theme')
+                ->description('Pick a color theme for this site. Each install (and each site in a multisite network) has its own theme, so one BlogKit codebase can power many differently-branded sites. The Brand colors below override the theme\'s accent if set.')
+                ->schema([
+                    Select::make('theme')
+                        ->label('Color theme')
+                        ->options(\App\Support\Theme::options())
+                        ->default(\App\Support\Theme::DEFAULT)
+                        ->native(false)
+                        ->selectablePlaceholder(false)
+                        ->helperText('Recolors the hero, buttons, links, nav and cards across the whole site.'),
+                    Select::make('home_style')
+                        ->label('Home page design')
+                        ->options(\App\Support\HomeStyle::options())
+                        ->default(\App\Support\HomeStyle::DEFAULT)
+                        ->native(false)
+                        ->selectablePlaceholder(false)
+                        ->helperText('Overall look of the home page (hero + layout).'),
+                    Select::make('blog_index_style')
+                        ->label('Blog catalogue design')
+                        ->options(\App\Support\BlogIndexStyle::options())
+                        ->default(\App\Support\BlogIndexStyle::DEFAULT)
+                        ->native(false)
+                        ->selectablePlaceholder(false)
+                        ->helperText('Layout of the blog listing / archive pages.'),
+                    Select::make('blog_post_style')
+                        ->label('Blog post layout')
+                        ->options(\App\Support\PostStyle::options())
+                        ->default(\App\Support\PostStyle::DEFAULT)
+                        ->native(false)
+                        ->selectablePlaceholder(false)
+                        ->helperText('Default layout for single blog posts. Any post can override this.'),
+                    Select::make('toc_style')
+                        ->label('Table of contents style')
+                        ->options(\App\Support\TocStyle::options())
+                        ->default(\App\Support\TocStyle::DEFAULT)
+                        ->native(false)
+                        ->selectablePlaceholder(false)
+                        ->helperText('Look of the in-article contents box.'),
+                    Select::make('header_style')
+                        ->label('Header (menu) design')
+                        ->options(\App\Support\HeaderStyle::options())
+                        ->default(\App\Support\HeaderStyle::DEFAULT)
+                        ->native(false)
+                        ->selectablePlaceholder(false)
+                        ->helperText('Layout of the top navigation bar.'),
+                    Select::make('footer_style')
+                        ->label('Footer design')
+                        ->options(\App\Support\FooterStyle::options())
+                        ->default(\App\Support\FooterStyle::DEFAULT)
+                        ->native(false)
+                        ->selectablePlaceholder(false)
+                        ->helperText('Layout and tone of the site footer.'),
+                ]),
             Section::make('Favicon')
                 ->description('Shown in browser tabs and bookmarks. Square image, ideally 512×512 PNG or .ico — Filament auto-generates the smaller sizes browsers request.')
                 ->schema([

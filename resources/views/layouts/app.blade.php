@@ -20,7 +20,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('partials.theme')
 </head>
-<body class="min-h-screen bg-white text-gray-900 antialiased flex flex-col">
+<body class="min-h-screen bg-white text-gray-900 antialiased flex flex-col" data-ecommerce="{{ ecommerce_enabled() ? '1' : '0' }}">
     @include('partials.body-scripts')
 
     {{-- Staff-only admin toolbar (never rendered for customers/guests). --}}
@@ -37,12 +37,17 @@
     </main>
 
     @include('partials.footer')
-    @include('partials.cart-recovery-banner')
+    {{-- Store-only surfaces: rendered only when the ecommerce module is on, so
+         a blog install never ships cart-recovery or product-search JS. The code
+         is retained (behind the flag) for when the store is re-enabled. --}}
+    @if(ecommerce_enabled())
+        @include('partials.cart-recovery-banner')
+    @endif
     @include('partials.whatsapp-button')
 
-    {{-- Live search: deferred module, only loaded when enabled, and it
-         self-initializes on window load so it never delays first paint. --}}
-    @if((bool) setting('search.ajax_enabled', true))
+    {{-- Live product search: deferred module, only loaded when the store is on
+         AND ajax search is enabled. Self-initializes on window load. --}}
+    @if(ecommerce_enabled() && (bool) setting('search.ajax_enabled', true))
         @vite('resources/js/search.js')
     @endif
 </body>

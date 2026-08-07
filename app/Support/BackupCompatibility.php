@@ -14,7 +14,7 @@ use ZipArchive;
  *  - archive integrity (SHA-256 of database.sql matches the manifest)
  *  - PHP version (target must not be older than the backup's) + extensions
  *  - Laravel major version
- *  - ShopKit version (never restore a NEWER backup into OLDER code)
+ *  - Hemdox BlogKit version (never restore a NEWER backup into OLDER code)
  *  - DB driver + server major version
  *  - migration lineage (backup must not contain migrations unknown to this
  *    codebase; extra code migrations are fine — they run after restore)
@@ -56,7 +56,7 @@ class BackupCompatibility
             $zip->close();
 
             return self::result(false, true,
-                ['No manifest.json in this archive — it predates the manifest system (or is not a ShopKit backup). Compatibility cannot be verified. Restore with --skip-checks only if you know its origin.'],
+                ['No manifest.json in this archive — it predates the manifest system (or is not a Hemdox BlogKit backup). Compatibility cannot be verified. Restore with --skip-checks only if you know its origin.'],
                 [], [], null);
         }
 
@@ -70,7 +70,7 @@ class BackupCompatibility
 
         // ── Format ───────────────────────────────────────────────────
         if ((int) ($manifest['format'] ?? 0) > BackupManifest::FORMAT) {
-            $errors[] = 'Backup format v'.$manifest['format'].' is newer than this ShopKit understands (v'.BackupManifest::FORMAT.'). Update ShopKit first.';
+            $errors[] = 'Backup format v'.$manifest['format'].' is newer than this Hemdox BlogKit understands (v'.BackupManifest::FORMAT.'). Update Hemdox BlogKit first.';
         }
 
         // ── Archive integrity ────────────────────────────────────────

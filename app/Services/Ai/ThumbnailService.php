@@ -15,22 +15,52 @@ class ThumbnailService
 {
     public function __construct(protected ImageGenerator $images = new ImageGenerator) {}
 
-    /**
-     * Build the image prompt. A custom prompt wins; otherwise it is derived
-     * from the title. "No text/watermark/logo" keeps AI thumbnails clean
-     * (generated text is usually garbled).
-     */
-    public function prompt(string $title, ?string $custom = null, ?string $style = null): string
-    {
-        $style = trim((string) ($style ?: setting('ai.image_style', 'modern flat editorial illustration, soft lighting, tasteful color palette')));
+    /** Named look-and-feel presets the admin can pick in AI settings. */
+    public const STYLE_PRESETS = [
+        'editorial' => 'modern flat editorial illustration, clean vector shapes, soft lighting, tasteful limited color palette',
+        'photographic' => 'photorealistic, natural lighting, shallow depth of field, high detail, editorial photography',
+        '3d' => 'soft 3D render, rounded shapes, gentle studio lighting, pastel gradients, playful and clean',
+        'minimal' => 'minimalist, lots of negative space, single focal subject, muted palette, elegant and calm',
+        'isometric' => 'isometric illustration, clean geometry, subtle shadows, cohesive modern color palette',
+    ];
 
-        if (filled($custom)) {
-            return trim($custom).($style !== '' ? ". Style: {$style}." : '').' No text, no watermark, no logo.';
+    /** The one instruction that keeps AI thumbnails clean (generated text is usually garbled). */
+    protected const NEGATIVE = 'Do not render any text, letters, words, numbers, captions, watermark, logo, signature or UI elements.';
+
+    /**
+     * Build the image prompt. A custom prompt wins; otherwise a rich prompt is
+     * composed from the title, excerpt and category so the picture actually
+     * represents the article, not just its headline.
+     *
+     * @param  array{custom?:?string,style?:?string,excerpt?:?string,category?:?string}  $ctx
+     */
+    public function prompt(string $title, array $ctx = []): string
+    {
+        $styleKey = trim((string) ($ctx['style'] ?? setting('ai.image_style', 'editorial')));
+        $style = self::STYLE_PRESETS[$styleKey] ?? ($styleKey !== '' ? $styleKey : self::STYLE_PRESETS['editorial']);
+
+        if (filled($ctx['custom'] ?? null)) {
+            return trim((string) $ctx['custom'])." Style: {$style}. ".self::NEGATIVE;
         }
 
-        return "A high-quality blog thumbnail image for an article titled \"".trim($title)."\". "
-            .($style !== '' ? "Style: {$style}. " : '')
-            .'Editorial, clean and modern, visually represents the topic. No text, no watermark, no logo.';
+        $topic = trim((string) $title);
+        $excerpt = trim((string) ($ctx['excerpt'] ?? ''));
+        $category = trim((string) ($ctx['category'] ?? ''));
+
+        $lines = [
+            "A high-quality, wide 16:9 blog header illustration that visually represents the topic of an article titled \"{$topic}\".",
+        ];
+        if ($excerpt !== '') {
+            $lines[] = 'The article is about: '.\Illuminate\Support\Str::limit($excerpt, 240, '').'.';
+        }
+        if ($category !== '') {
+            $lines[] = "Theme/category: {$category}.";
+        }
+        $lines[] = "Style: {$style}.";
+        $lines[] = 'Strong single focal subject, balanced composition, professional, uncluttered, suitable as a hero image on a modern blog.';
+        $lines[] = self::NEGATIVE;
+
+        return implode(' ', $lines);
     }
 
     /**
@@ -46,7 +76,12 @@ class ThumbnailService
             return null;
         }
 
-        $prompt = $this->prompt($title, $opts['custom'] ?? null, $opts['style'] ?? null);
+        $prompt = $this->prompt($title, [
+            'custom' => $opts['custom'] ?? null,
+            'style' => $opts['style'] ?? null,
+            'excerpt' => $opts['excerpt'] ?? $post->excerpt,
+            'category' => $opts['category'] ?? $post->category?->name,
+        ]);
 
         $image = $this->images->generate($prompt, array_filter([
             'provider' => $opts['provider'] ?? null,

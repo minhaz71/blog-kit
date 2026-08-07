@@ -18,14 +18,14 @@ use Symfony\Component\Process\Process;
  * Every step is echoed so the admin "Update" button (which runs this
  * detached via BackgroundProcess) can stream progress.
  */
-class ShopkitUpdate extends Command
+class BlogkitUpdate extends Command
 {
     protected $signature = 'blogkit:update
         {--dry-run : Show what would happen without changing anything}
         {--skip-backup : DANGER: skip the pre-update backup (never use in production)}
         {--branch= : Branch to pull (default: current)}';
 
-    protected $description = 'Update ShopKit from git safely: backup, pull, migrate, rebuild — with automatic rollback.';
+    protected $description = 'Update Hemdox BlogKit from git safely: backup, pull, migrate, rebuild — with automatic rollback.';
 
     protected ?string $rollbackCommit = null;
 
@@ -36,7 +36,7 @@ class ShopkitUpdate extends Command
         @set_time_limit(0);
         $dry = (bool) $this->option('dry-run');
 
-        $this->line('<info>ShopKit updater</info> — current version '.Version::core().' @ '.(Version::gitCommit() ?? 'unknown'));
+        $this->line('<info>Hemdox BlogKit updater</info> — current version '.Version::core().' @ '.(Version::gitCommit() ?? 'unknown'));
 
         // ── Step 1: pre-flight gate ────────────────────────────────────
         if (! Version::isGitRepo()) {

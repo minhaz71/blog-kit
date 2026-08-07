@@ -47,18 +47,45 @@ button[class*="border-"]:active:not(:disabled) {
     transform: scale(.95);
 }
 
-/* ── Brand tokens ───────────────────────────────────────────────────────
-   Single source of truth for the storefront's brand color. The Appearance
-   settings theme partial overrides --brand at runtime, so recoloring the
-   store recolors descriptions, thumbnails and delivery cards together. */
+/* ── Brand tokens (theme system) ────────────────────────────────────────
+   Single source of truth for the site's brand color. These are the DEFAULT
+   ("teal") theme values; App\Support\Theme overrides them at runtime via a
+   content-hashed stylesheet (see theme_css_href() + partials/theme.blade.php),
+   so each site/install can pick its own theme without touching markup. Every
+   accent in the UI reads these through the .*-brand utilities below. */
 :root {
-    --brand: #0f766e;
-    --brand-dark: #115e59;
+    --brand: #0d9488;          /* primary accent (buttons, badges) */
+    --brand-dark: #0f766e;     /* hover / active */
+    --brand-strong: #0f766e;   /* brand text on a white background */
+    --brand-tint: #f0fdfa;     /* light brand background */
+    --brand-fg: #ffffff;       /* text/icon on a brand fill */
+    --brand-grad-from: #115e59; /* hero / newsletter gradient start */
+    --brand-grad-to: #059669;   /* hero / newsletter gradient end */
+    /* Legacy aliases used by .pd-content (product copy styling). */
     --brand-soft: #f0fdfa;
     --brand-ring: #99f6e4;
     --ink: #111827;
     --ink-soft: #374151;
 }
+
+/* ── Semantic brand utilities ───────────────────────────────────────────
+   Markup uses these instead of hard-coded Tailwind color classes so a theme
+   switch recolors the whole site. */
+.bg-brand { background-color: var(--brand); }
+.bg-brand-dark { background-color: var(--brand-dark); }
+.bg-brand-tint { background-color: var(--brand-tint); }
+.text-brand { color: var(--brand-strong); }
+.text-brand-fg { color: var(--brand-fg); }
+.border-brand { border-color: var(--brand); }
+.ring-brand { --tw-ring-color: var(--brand); }
+.decoration-brand { text-decoration-color: var(--brand); }
+.grad-brand { background-image: linear-gradient(to bottom right, var(--brand-grad-from), var(--brand-grad-to)); }
+.hover\:bg-brand:hover { background-color: var(--brand); }
+.hover\:bg-brand-dark:hover { background-color: var(--brand-dark); }
+.hover\:bg-brand-tint:hover { background-color: var(--brand-tint); }
+.hover\:text-brand:hover { color: var(--brand-strong); }
+.group:hover .group-hover\:text-brand { color: var(--brand-strong); }
+.group:hover .group-hover\:bg-brand { background-color: var(--brand); }
 
 /* ── Product description content (.pd-content) ─────────────────────────
    Canonical styling for AI-written product copy: semantic HTML in
@@ -153,3 +180,35 @@ button[class*="border-"]:active:not(:disabled) {
    schema requires block content inside cells). Neutralize prose paragraph
    margins there so those tables render identically to unwrapped ones. */
 .prose td p, .prose th p, .pd-content td p, .pd-content th p { margin: 0; }
+
+/* ── Single-post layout styles (App\Support\PostStyle) ──────────────────── */
+/* Drop cap on the first paragraph (Classic / Magazine / Feature / Newspaper). */
+.bd-dropcap > p:first-of-type::first-letter {
+    float: left;
+    font-family: ui-serif, Georgia, Cambria, 'Times New Roman', serif;
+    font-size: 3.6rem;
+    line-height: 0.78;
+    font-weight: 800;
+    padding: 0.1rem 0.6rem 0 0;
+    color: var(--brand-strong);
+}
+/* Serif body when a serif style is active (title uses Tailwind's font-serif). */
+.bd-article.font-serif,
+.bd-article.font-serif :where(p, li, blockquote, h2, h3, h4) {
+    font-family: ui-serif, Georgia, Cambria, 'Times New Roman', serif;
+}
+/* Sidebar variant of the table of contents: lighter, no card chrome. */
+.bd-toc--side {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    font-size: 0.875rem;
+}
+.bd-toc--side .bd-toc__title { margin-bottom: 0.5rem; }
+
+/* ── Dark home page design (App\Support\HomeStyle 'dark') ───────────────
+   Section headings sit on the dark page background; the post cards stay
+   white, so only the page-level headings need lightening. */
+.home--dark h2 { color: #f8fafc; }

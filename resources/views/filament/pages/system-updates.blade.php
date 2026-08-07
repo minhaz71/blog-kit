@@ -36,14 +36,14 @@
     @if($behind)
         <div class="sup-card" style="border-color:#f59e0b">
             <strong>⬆ {{ $behind }} update(s) available.</strong>
-            Click <em>Update ShopKit</em> above. A full backup is taken first and the update rolls back automatically if anything fails.
+            Click <em>Update Hemdox BlogKit</em> above. A full backup is taken first and the update rolls back automatically if anything fails.
         </div>
     @endif
 
     <div class="sup-grid">
         {{-- Current version --}}
         <div class="sup-card">
-            <h3>ShopKit version</h3>
+            <h3>Hemdox BlogKit version</h3>
             <div class="sup-ver">
                 <b>{{ $core }}</b>
                 <span>@if($behind === 0)<span class="sup-badge sup-badge--ok">latest</span>@elseif($behind)<span class="sup-badge sup-badge--new">{{ $behind }} behind</span>@endif</span>

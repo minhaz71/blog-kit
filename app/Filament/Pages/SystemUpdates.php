@@ -14,9 +14,9 @@ use Illuminate\Support\Facades\Artisan;
 use UnitEnum;
 
 /**
- * System → Updates: shows the running ShopKit version, every tool's version,
+ * System → Updates: shows the running Hemdox BlogKit version, every tool's version,
  * git state, production-readiness checks, the changelog, and a guarded
- * one-click "Update ShopKit" that runs `blogkit:update` detached in the
+ * one-click "Update Hemdox BlogKit" that runs `blogkit:update` detached in the
  * background (mandatory backup + auto-rollback live inside that command).
  * Super Admin only.
  */
@@ -70,12 +70,12 @@ class SystemUpdates extends Page
                         ->body(trim(Artisan::output()))->success()->send();
                 }),
             Action::make('update')
-                ->label('Update ShopKit')
+                ->label('Update Hemdox BlogKit')
                 ->icon(Heroicon::OutlinedArrowUpCircle)
                 ->color('primary')
                 ->visible(fn () => Version::isGitRepo())
                 ->requiresConfirmation()
-                ->modalHeading('Update ShopKit now?')
+                ->modalHeading('Update Hemdox BlogKit now?')
                 ->modalDescription('This takes a full backup first, then pulls the new version, runs migrations and rebuilds. '
                     .'If anything fails it rolls back automatically to the current version and data. The site briefly enters maintenance mode.')
                 ->modalSubmitActionLabel('Back up & update')

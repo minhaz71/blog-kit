@@ -48,6 +48,47 @@
 
         $menu = $menu->push(['label' => 'Blog', 'url' => route('blog.index'), 'children' => []])->all();
     }
+
+    // Header design tokens (Admin → Appearance → Header design).
+    $h = \App\Support\HeaderStyle::tokens();
+    $bar = $h['bar'];
+    $isDark = $bar === 'dark';
+    $navMode = $h['nav'];            // row2 | inline | drawer
+    $logoCenter = $h['logo'] === 'center';
+    $accent = $h['accent'];          // underline | pill | plain
+
+    // Outer bar chrome.
+    $headerChrome = match ($bar) {
+        'shadow' => 'bg-white shadow-sm',
+        'bordered' => 'bg-white border-y-2 border-gray-200',
+        'dark' => 'bg-gray-900 text-white',
+        default => 'bg-white border-b border-gray-200', // plain + brandstrip
+    };
+
+    // For nav=drawer the hamburger + left drawer are the only nav even on
+    // desktop, so they must show at every breakpoint.
+    $hamburgerHidden = $navMode === 'drawer' ? '' : 'lg:hidden';
+
+    // Desktop nav item spacing (pills sit tighter than underline/plain links).
+    $navGap = $accent === 'pill' ? 'gap-x-1' : 'gap-x-6';
+
+    // Per-item desktop nav link classes, keyed by accent + active + dark bar.
+    $navLinkClass = function (bool $active) use ($accent, $isDark) {
+        return match ($accent) {
+            'pill' => 'flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 transition-colors '
+                . ($active
+                    ? 'bg-brand-tint text-brand'
+                    : ($isDark ? 'text-white/80 hover:bg-white/10 hover:text-white' : 'text-gray-700 hover:bg-brand-tint hover:text-brand')),
+            'plain' => 'flex items-center gap-1 whitespace-nowrap py-2 transition-colors '
+                . ($active
+                    ? 'text-brand'
+                    : ($isDark ? 'text-white/80 hover:text-white' : 'text-gray-700 hover:text-brand')),
+            default => 'relative flex items-center gap-1 whitespace-nowrap py-2 transition-colors after:absolute after:inset-x-0 after:bottom-0.5 after:h-0.5 after:origin-left after:rounded-full after:bg-teal-600 after:transition-transform after:duration-200 '
+                . ($active
+                    ? ($isDark ? 'text-white after:scale-x-100' : 'text-teal-700 after:scale-x-100')
+                    : ($isDark ? 'text-white/80 hover:text-white after:scale-x-0 group-hover:after:scale-x-100' : 'text-gray-700 hover:text-teal-600 after:scale-x-0 group-hover:after:scale-x-100')),
+        };
+    };
 @endphp
 @if($announcement = setting('appearance.announcement_text'))
     {{-- Slim announcement bar — text + optional link set under Appearance settings. --}}
@@ -59,7 +100,7 @@
         @endif
     </div>
 @endif
-<header class="sticky top-0 z-40 border-b border-gray-200 bg-white"
+<header class="sticky top-0 z-40 {{ $headerChrome }}"
         x-data="{
             menuOpen: false,
             cartOpen: false,
@@ -79,25 +120,78 @@
         @cart:count.document="cartCount = $event.detail.count"
         @cart:refresh.document="if (cartHtml !== null) refreshCart()"
         @keydown.escape.window="menuOpen = false; cartOpen = false">
+    @if($bar === 'brandstrip')
+        {{-- Thin theme-aware brand strip sitting above the white bar. --}}
+        <div class="grad-brand h-1" aria-hidden="true"></div>
+    @endif
     <div class="mx-auto max-w-7xl px-4 sm:px-6">
-        <div class="flex h-16 items-center justify-between gap-4">
-            {{-- Mobile menu button --}}
-            <button class="-ml-2 p-2 lg:hidden" @click="menuOpen = true" aria-label="Open menu">
-                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
-            </button>
+        <div class="relative flex h-16 items-center gap-4">
+            {{-- Left cluster: menu button + (logo when left-aligned) --}}
+            <div class="flex shrink-0 items-center gap-2">
+                <button class="-ml-2 p-2 {{ $hamburgerHidden }}" @click="menuOpen = true" aria-label="Open menu">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
 
-            <a href="{{ route('home') }}" class="flex shrink-0 items-center gap-2">
-                @if($logoUrl)
-                    @php $logoDims = image_dimensions($logo); @endphp
-                    <img src="{{ $logoUrl }}" alt="{{ $storeName }}"
-                         @if($logoDims) width="{{ $logoDims[0] }}" height="{{ $logoDims[1] }}" @endif
-                         class="h-9 w-auto max-w-[160px] object-contain">
-                @else
-                    <span class="text-xl font-bold tracking-tight">{{ $storeName }}</span>
-                @endif
-            </a>
+                @unless($logoCenter)
+                    <a href="{{ route('home') }}" class="flex shrink-0 items-center gap-2">
+                        @if($logoUrl)
+                            @php($logoDims = image_dimensions($logo))
+                            <img src="{{ $logoUrl }}" alt="{{ $storeName }}"
+                                 @if($logoDims) width="{{ $logoDims[0] }}" height="{{ $logoDims[1] }}" @endif
+                                 class="h-9 w-auto max-w-[160px] object-contain">
+                        @else
+                            <span class="text-xl font-bold tracking-tight">{{ $storeName }}</span>
+                        @endif
+                    </a>
+                @endunless
+            </div>
 
-            <div class="flex items-center gap-1 sm:gap-3">
+            @if($navMode === 'inline' && ! empty($menu))
+                {{-- Nav rendered inline within the top bar (lg and up). --}}
+                <nav class="hidden flex-1 items-center {{ $navGap }} gap-y-1 text-sm font-medium lg:flex {{ $logoCenter ? 'justify-start' : 'justify-end' }}" aria-label="Main">
+                    @foreach($menu as $item)
+                        @php($navActive = ($np = trim((string) parse_url($item['url'], PHP_URL_PATH), '/')) !== '' && (request()->is($np) || request()->is($np.'/*')))
+                        <div class="group relative">
+                            <a href="{{ $item['url'] }}"
+                               @if($navActive) aria-current="page" @endif
+                               class="{{ $navLinkClass($navActive) }}">
+                                {{ $item['label'] }}
+                                @if(! empty($item['children']))
+                                    <svg class="h-3 w-3 transition group-hover:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                @endif
+                            </a>
+                            @if(! empty($item['children']))
+                                <div class="absolute left-1/2 top-full z-20 hidden min-w-[220px] -translate-x-1/2 rounded-lg border border-gray-200 bg-white py-2 shadow-lg group-hover:block">
+                                    @foreach($item['children'] as $child)
+                                        <a href="{{ $child['url'] }}" class="block whitespace-nowrap px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 hover:text-teal-600">{{ $child['label'] }}</a>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                </nav>
+            @else
+                {{-- Spacer keeps the actions pushed right (and lets a centered logo sit between). --}}
+                <div class="flex-1"></div>
+            @endif
+
+            @if($logoCenter)
+                {{-- Absolutely centered logo overlay. --}}
+                <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <a href="{{ route('home') }}" class="pointer-events-auto flex shrink-0 items-center gap-2">
+                        @if($logoUrl)
+                            @php($logoDims = image_dimensions($logo))
+                            <img src="{{ $logoUrl }}" alt="{{ $storeName }}"
+                                 @if($logoDims) width="{{ $logoDims[0] }}" height="{{ $logoDims[1] }}" @endif
+                                 class="h-9 w-auto max-w-[160px] object-contain">
+                        @else
+                            <span class="text-xl font-bold tracking-tight">{{ $storeName }}</span>
+                        @endif
+                    </a>
+                </div>
+            @endif
+
+            <div class="flex shrink-0 items-center gap-1 sm:gap-3">
                 @php($ajaxSearch = (bool) setting('search.ajax_enabled', true))
                 @if(ecommerce_enabled())
                 <div class="hsearch hidden md:block"
@@ -112,7 +206,13 @@
                 </div>
                 @endif
 
-                <a href="{{ auth()->check() ? route('account.dashboard') : route('login') }}" class="p-2 hover:text-indigo-600" aria-label="Account">
+                {{-- Blog CTA — brand-filled, so the header carries the active theme. --}}
+                @if($h['cta'])
+                <a href="{{ route('home') }}#newsletter" class="bg-brand text-brand-fg hover:bg-brand-dark hidden rounded-full px-4 py-2 text-sm font-semibold transition sm:inline-block">
+                    Subscribe
+                </a>
+                @endif
+                <a href="{{ auth()->check() ? url('/admin') : route('login') }}" class="hover:text-brand p-2" aria-label="{{ auth()->check() ? 'Admin dashboard' : 'Sign in' }}">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                 </a>
 
@@ -128,17 +228,18 @@
     </div>
 
     {{-- Desktop primary nav — its own full-width row so many items wrap
-         cleanly onto a second line (each label stays on one line). --}}
-    @if(! empty($menu))
-        <div class="hidden border-t border-gray-100 lg:block">
+         cleanly onto a second line (each label stays on one line). Rendered
+         only when the design places the nav on its own row. --}}
+    @if($navMode === 'row2' && ! empty($menu))
+        <div class="hidden border-t {{ $isDark ? 'border-white/10' : 'border-gray-100' }} lg:block">
             <div class="mx-auto max-w-7xl px-4 sm:px-6">
-                <nav class="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 py-1.5 text-sm font-medium" aria-label="Main">
+                <nav class="flex flex-wrap items-center justify-center {{ $navGap }} gap-y-1 py-1.5 text-sm font-medium" aria-label="Main">
                     @foreach($menu as $item)
                         @php($navActive = ($np = trim((string) parse_url($item['url'], PHP_URL_PATH), '/')) !== '' && (request()->is($np) || request()->is($np.'/*')))
                         <div class="group relative">
                             <a href="{{ $item['url'] }}"
                                @if($navActive) aria-current="page" @endif
-                               class="relative flex items-center gap-1 whitespace-nowrap py-2 transition-colors after:absolute after:inset-x-0 after:bottom-0.5 after:h-0.5 after:origin-left after:rounded-full after:bg-teal-600 after:transition-transform after:duration-200 {{ $navActive ? 'text-teal-700 after:scale-x-100' : 'text-gray-700 hover:text-teal-600 after:scale-x-0 group-hover:after:scale-x-100' }}">
+                               class="{{ $navLinkClass($navActive) }}">
                                 {{ $item['label'] }}
                                 @if(! empty($item['children']))
                                     <svg class="h-3 w-3 transition group-hover:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
@@ -179,7 +280,7 @@
          x-transition.opacity @click="menuOpen = false; cartOpen = false"></div>
 
     {{-- Left drawer: mobile menu --}}
-    <aside class="fixed inset-y-0 left-0 z-50 flex w-80 max-w-[85vw] flex-col bg-white shadow-xl lg:hidden"
+    <aside class="fixed inset-y-0 left-0 z-50 flex w-80 max-w-[85vw] flex-col bg-white shadow-xl {{ $hamburgerHidden }}"
            x-show="menuOpen" x-cloak
            x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0"
            x-transition:leave="transition duration-150 ease-in" x-transition:leave-start="translate-x-0" x-transition:leave-end="-translate-x-full"
@@ -215,8 +316,8 @@
             </div>
         </nav>
         <div class="border-t border-gray-200 p-4 text-sm">
-            <a href="{{ auth()->check() ? route('account.dashboard') : route('login') }}" class="font-medium text-indigo-600">
-                {{ auth()->check() ? 'My account' : 'Sign in / Register' }}
+            <a href="{{ auth()->check() ? url('/admin') : route('login') }}" class="text-brand font-medium">
+                {{ auth()->check() ? 'Admin dashboard' : 'Sign in' }}
             </a>
         </div>
     </aside>

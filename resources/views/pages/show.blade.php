@@ -24,7 +24,7 @@
 
 @if($isCity)
     @php
-        // "TEREA Delivery in Abu Dhabi" → "Abu Dhabi" for the lead line.
+        // "Delivery in Abu Dhabi" → "Abu Dhabi" for the lead line.
         $cityName = \Illuminate\Support\Str::of($page->title)->after(' in ')->trim()->value();
     @endphp
     {{-- City delivery pages: breadcrumb + title + catalogue all share ONE
@@ -35,7 +35,7 @@
         <header class="mb-8 mt-4">
             <h1 class="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">{{ $page->title }}</h1>
             <p class="mt-3 max-w-2xl text-base text-gray-600">
-                Genuine IQOS TEREA{{ $cityName ? ', delivered across '.$cityName : '' }} — browse a category below and order in a couple of taps.
+{{ $cityName ? 'Delivering across '.$cityName.' — b' : 'B' }}rowse a category below and order in a couple of taps.
             </p>
         </header>
         @include('partials.city-catalogue', ['flush' => true, 'hideHead' => true])

@@ -1,131 +1,150 @@
 @extends('layouts.app')
 
+@php
+    // Resolve the layout style: per-post override wins, else the site default
+    // (Admin → Appearance → Blog post style). See App\Support\PostStyle.
+    $t = \App\Support\PostStyle::tokens(\App\Support\PostStyle::resolveKey($post->post_style ?? null));
+    $maxW = ($t['width'] ?? 'narrow') === 'wide' ? 'max-w-4xl' : 'max-w-3xl';
+    $fontClass = ($t['font'] ?? 'sans') === 'serif' ? 'font-serif' : '';
+    $titleClass = match ($t['title'] ?? 'lg') {
+        'display' => 'text-4xl font-extrabold sm:text-6xl',
+        'xl' => 'text-4xl font-bold sm:text-5xl',
+        default => 'text-3xl font-bold sm:text-4xl',
+    };
+    $hasHero = empty($t['noHero']) && $post->featuredImageUrl();
+    $bodyClass = ($t['dropcap'] ?? false ? 'bd-dropcap ' : '').$fontClass;
+    $tocInline = ($t['toc'] ?? 'inline') === 'inline';
+    $tocSidebar = ($t['toc'] ?? '') === 'sidebar';
+    $eyebrow = fn ($light = false) => $post->category
+        ? '<a href="'.route('blog.category', $post->category->slug).'" class="text-xs font-semibold uppercase tracking-widest '.($light ? 'text-white/90' : 'text-brand').'">'.e($post->category->name).'</a>'
+        : '';
+@endphp
+
 @section('content')
-@if (!empty($isPreview))
+@if (! empty($isPreview))
     <div class="bg-amber-500 px-4 py-2 text-center text-sm font-semibold text-white">
         Draft preview — not visible to visitors.
     </div>
 @endif
-<article class="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-    <x-breadcrumbs :crumbs="$seo->breadcrumbs" />
 
-    <header class="mt-6">
-        <h1 class="text-3xl font-bold sm:text-4xl">{{ $post->title }}</h1>
-        <div class="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-500">
-            <a href="{{ $post->author->authorUrl() }}" class="font-medium text-gray-700 hover:text-indigo-600">{{ $post->author->publicName() }}</a>
-            <span aria-hidden="true">·</span>
-            @if($post->published_at)
-                <time datetime="{{ $post->published_at->toDateString() }}">Published {{ $post->published_at->format('M j, Y') }}</time>
-                @if($post->updated_at->gt($post->published_at->addDay()))
-                    <span aria-hidden="true">·</span>
-                    <time datetime="{{ $post->updated_at->toDateString() }}">Updated {{ $post->updated_at->format('M j, Y') }}</time>
+@switch($t['layout'])
+
+{{-- ── Sidebar (Editorial / Documentation): sticky meta + contents left ── --}}
+@case('sidebar')
+    <div class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+        <x-breadcrumbs :crumbs="$seo->breadcrumbs" />
+        <div class="mt-6 grid gap-10 lg:grid-cols-[16rem_minmax(0,1fr)]">
+            <aside class="space-y-5 lg:sticky lg:top-24 lg:self-start">
+                {!! $eyebrow() !!}
+                @include('blog.partials.meta')
+                @if($tocSidebar)@include('blog.partials.toc', ['sidebar' => true])@endif
+            </aside>
+            <div class="min-w-0">
+                <h1 class="{{ $titleClass }} tracking-tight text-balance text-gray-900 {{ $fontClass }}">{{ $post->title }}</h1>
+                @if($hasHero)
+                    <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="mt-6 w-full rounded-2xl object-cover">
                 @endif
-            @else
-                <span>Not published yet</span>
-            @endif
-            <span aria-hidden="true">·</span>
-            <span>{{ $post->reading_time }} min read</span>
-        </div>
-    </header>
-
-    @if($post->featuredImageUrl())
-        <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" width="768" height="432" class="mt-6 w-full rounded-xl object-cover">
-    @endif
-
-    @if(count($toc) > 1)
-        {{-- .bd-toc styled in blog.css (cached bundle), no inline CSS. --}}
-        <nav class="bd-toc" aria-label="Table of contents">
-            <p class="bd-toc__title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25h16.5M3.75 12h16.5m-16.5 6.75h16.5"/>
-                </svg>
-                In this article
-            </p>
-            <ol class="bd-toc__list">
-                @foreach($toc as $item)
-                    <li class="bd-toc__item--{{ $item['level'] }}">
-                        <a href="#{{ $item['anchor'] }}">{{ $item['text'] }}</a>
-                    </li>
-                @endforeach
-            </ol>
-        </nav>
-    @endif
-
-    {{-- Comparison articles: the two products under review, visible up
-         front (backs the ItemList schema with real on-page content and
-         gives buyers a direct path to both product pages). --}}
-    @if(($compared = $post->comparedProducts())->isNotEmpty())
-        <section class="mt-8" aria-labelledby="compared-products-heading">
-            <h2 id="compared-products-heading" class="text-lg font-bold">Products compared in this article</h2>
-            <div class="mt-3 grid grid-cols-2 gap-4">
-                @foreach($compared as $comparedProduct)
-                    <x-product-card :product="$comparedProduct" />
-                @endforeach
+                @include('blog.partials.body')
+                @include('blog.partials.endmatter')
             </div>
-        </section>
-    @endif
-
-    {{-- bd-article: the tag-based blog design layer (blog.css) — every
-         semantic tag is styled, no classes needed in the content itself. --}}
-    <div class="prose bd-article mt-8 max-w-none">
-        {!! preg_replace_callback('/<h([23])([^>]*)>(.*?)<\/h\1>/i', fn ($m) => sprintf('<h%s%s id="%s">%s</h%s>', $m[1], $m[2], str(strip_tags($m[3]))->slug(), $m[3], $m[1]), $post->content ?? '') !!}
+        </div>
     </div>
+    @break
 
-    @if($post->tags->isNotEmpty())
-        <div class="mt-8 flex flex-wrap gap-2">
-            @foreach($post->tags as $tag)
-                <span class="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">#{{ $tag->name }}</span>
-            @endforeach
-        </div>
-    @endif
-
-    {{-- E-E-A-T author box: who wrote this and why they're credible. --}}
-    @if($post->author && ($post->author->bio || $post->author->job_title))
-        <aside class="mt-10 flex gap-4 rounded-xl border border-gray-200 bg-gray-50 p-5" aria-label="About the author">
-            @if($post->author->avatarUrl())
-                <img src="{{ $post->author->avatarUrl() }}" alt="{{ $post->author->publicName() }}" width="64" height="64"
-                     class="h-16 w-16 shrink-0 rounded-full object-cover">
-            @else
-                <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xl font-bold text-indigo-600">
-                    {{ mb_substr($post->author->publicName(), 0, 1) }}
+{{-- ── Magazine: full-bleed cover with the title overlaid ── --}}
+@case('heroFull')
+    @if($hasHero)
+        <div class="relative h-[52vh] min-h-[22rem] w-full overflow-hidden">
+            <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="absolute inset-0 h-full w-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent"></div>
+            <div class="absolute inset-x-0 bottom-0 text-white">
+                <div class="mx-auto {{ $maxW }} px-4 pb-10 sm:px-6">
+                    {!! $eyebrow(true) !!}
+                    <h1 class="mt-2 {{ $titleClass }} tracking-tight text-balance {{ $fontClass }}">{{ $post->title }}</h1>
+                    <div class="mt-3">@include('blog.partials.meta', ['light' => true])</div>
                 </div>
+            </div>
+        </div>
+    @else
+        <div class="grad-brand text-white"><div class="mx-auto {{ $maxW }} px-4 py-16 sm:px-6">
+            {!! $eyebrow(true) !!}
+            <h1 class="mt-2 {{ $titleClass }} {{ $fontClass }}">{{ $post->title }}</h1>
+            <div class="mt-3">@include('blog.partials.meta', ['light' => true])</div>
+        </div></div>
+    @endif
+    <article class="mx-auto {{ $maxW }} px-4 py-10 sm:px-6">
+        <x-breadcrumbs :crumbs="$seo->breadcrumbs" />
+        @if($tocInline)@include('blog.partials.toc')@endif
+        @include('blog.partials.body')
+        @include('blog.partials.endmatter')
+    </article>
+    @break
+
+{{-- ── Bold: brand gradient banner header ── --}}
+@case('heroBand')
+    <div class="grad-brand text-white">
+        <div class="mx-auto {{ $maxW }} px-4 py-16 sm:px-6">
+            {!! $eyebrow(true) !!}
+            <h1 class="mt-2 {{ $titleClass }} tracking-tight text-balance {{ $fontClass }}">{{ $post->title }}</h1>
+            <div class="mt-4">@include('blog.partials.meta', ['light' => true])</div>
+        </div>
+    </div>
+    <article class="mx-auto {{ $maxW }} px-4 py-10 sm:px-6">
+        <x-breadcrumbs :crumbs="$seo->breadcrumbs" />
+        @if($hasHero)
+            <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="-mt-16 w-full rounded-2xl object-cover shadow-xl ring-1 ring-black/5">
+        @endif
+        @if($tocInline)@include('blog.partials.toc')@endif
+        @include('blog.partials.body')
+        @include('blog.partials.endmatter')
+    </article>
+    @break
+
+{{-- ── Split hero: title beside the cover on a brand panel ── --}}
+@case('split')
+    <div class="grad-brand text-white">
+        <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+            <div class="grid items-center gap-8 md:grid-cols-2">
+                <div>
+                    {!! $eyebrow(true) !!}
+                    <h1 class="mt-2 {{ $titleClass }} tracking-tight text-balance {{ $fontClass }}">{{ $post->title }}</h1>
+                    <div class="mt-4">@include('blog.partials.meta', ['light' => true])</div>
+                </div>
+                @if($hasHero)
+                    <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="aspect-[4/3] w-full rounded-2xl object-cover shadow-xl">
+                @endif
+            </div>
+        </div>
+    </div>
+    <article class="mx-auto {{ $maxW }} px-4 py-10 sm:px-6">
+        <x-breadcrumbs :crumbs="$seo->breadcrumbs" />
+        @if($tocInline)@include('blog.partials.toc')@endif
+        @include('blog.partials.body')
+        @include('blog.partials.endmatter')
+    </article>
+    @break
+
+{{-- ── Centered (Classic / Minimal / Feature / Card / Newspaper) ── --}}
+@default
+    @php($card = ($t['frame'] ?? 'none') === 'card')
+    <div class="{{ $card ? 'bg-gray-50 py-10' : '' }}">
+        <article class="mx-auto {{ $maxW }} px-4 sm:px-6 {{ $card ? 'rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-10' : 'py-10' }}">
+            <x-breadcrumbs :crumbs="$seo->breadcrumbs" />
+            <header class="mt-6">
+                {!! $eyebrow() !!}
+                <h1 class="mt-2 {{ $titleClass }} tracking-tight text-balance text-gray-900 {{ $fontClass }}">{{ $post->title }}</h1>
+                <div class="mt-3">@include('blog.partials.meta')</div>
+                @if($t['rules'] ?? false)<hr class="mt-5 border-gray-900/10">@endif
+            </header>
+            @if($hasHero)
+                <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" width="768" height="432" class="mt-6 w-full rounded-2xl object-cover">
             @endif
-            <div>
-                <p class="text-sm font-semibold">
-                    <a href="{{ $post->author->authorUrl() }}" class="hover:text-indigo-600">{{ $post->author->publicName() }}</a>
-                    @if($post->author->job_title)
-                        <span class="ml-1 font-normal text-gray-500">· {{ $post->author->job_title }}</span>
-                    @endif
-                </p>
-                @if($post->author->bio)
-                    <p class="mt-1 text-sm text-gray-600">{{ $post->author->bio }}</p>
-                @endif
-                @if(array_filter((array) $post->author->social_links))
-                    <p class="mt-1.5 flex gap-3 text-xs">
-                        @foreach(array_filter((array) $post->author->social_links) as $link)
-                            <a href="{{ $link }}" rel="me noopener" target="_blank" class="text-indigo-600 hover:underline">{{ parse_url($link, PHP_URL_HOST) }}</a>
-                        @endforeach
-                    </p>
-                @endif
-            </div>
-        </aside>
-    @endif
+            @if($tocInline)@include('blog.partials.toc')@endif
+            @include('blog.partials.body')
+            @include('blog.partials.endmatter')
+        </article>
+    </div>
+@endswitch
 
-    <x-faq-section :faqs="$post->faqs" />
-
-    @if($related->isNotEmpty())
-        <section class="mt-12" aria-labelledby="related-posts-heading">
-            <h2 id="related-posts-heading" class="text-xl font-bold">Related posts</h2>
-            <div class="mt-4 grid gap-4 sm:grid-cols-3">
-                @foreach($related as $relatedPost)
-                    <a href="{{ $relatedPost->url() }}" class="rounded-lg border border-gray-200 p-4 text-sm hover:shadow-md">
-                        <p class="text-xs text-gray-500">{{ $relatedPost->published_at->format('M j, Y') }}</p>
-                        <p class="mt-1 font-semibold hover:text-indigo-600">{{ $relatedPost->title }}</p>
-                    </a>
-                @endforeach
-            </div>
-        </section>
-    @endif
-</article>
 @include('partials.custom-code', ['model' => $post])
 @endsection

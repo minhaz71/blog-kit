@@ -312,18 +312,21 @@ if (! function_exists('vite_fonts_links')) {
 
 if (! function_exists('theme_css_href')) {
     /**
-     * The admin theme overrides (Appearance settings) compiled to a static
-     * CSS file on the public disk, so no inline <style> ships in the head.
-     * Content-hashed filename = safe long caching; regenerates automatically
-     * when the settings change. Returns null when nothing is overridden.
+     * The active theme (Appearance settings) compiled to a static CSS file on
+     * the public disk, so no inline <style> ships in the head. Emits the brand
+     * custom properties (--brand, --brand-dark, …) for the selected preset plus
+     * any admin overrides (radius, card shadow, legacy indigo/red mapping).
+     * Content-hashed filename = safe long caching; regenerates when settings
+     * change. Returns null when the default theme is active with no overrides
+     * (the defaults baked into app.css then apply, saving a request).
      */
     function theme_css_href(): ?string
     {
-        $brand = setting('appearance.primary_color');
-        $brandHover = setting('appearance.primary_hover_color');
         $saleBadge = setting('appearance.sale_badge_color');
         $radius = setting('appearance.border_radius');
         $cardShadow = setting('appearance.card_shadow', true);
+        $hasColorOverride = trim((string) setting('appearance.primary_color', '')) !== '';
+        $isDefaultTheme = \App\Support\Theme::active() === \App\Support\Theme::DEFAULT;
 
         $radiusValue = match ($radius) {
             'none' => '0px',
@@ -334,16 +337,30 @@ if (! function_exists('theme_css_href')) {
 
         $css = '';
 
-        if ($brand) {
-            $hover = $brandHover ?: $brand;
-            $css .= ":root{--brand:{$brand};--brand-dark:{$hover};}"
-                .".bg-indigo-600{background-color:{$brand} !important;}"
-                .".text-indigo-600{color:{$brand} !important;}"
-                .".hover\\:text-indigo-600:hover{color:{$brand} !important;}"
-                .".border-indigo-600{border-color:{$brand} !important;}"
-                .".ring-indigo-600{--tw-ring-color:{$brand} !important;}"
-                .".focus\\:ring-indigo-500:focus,.focus\\:border-indigo-500:focus{--tw-ring-color:{$brand} !important;border-color:{$brand} !important;}"
-                .".hover\\:bg-indigo-700:hover,.hover\\:bg-indigo-500:hover{background-color:{$hover} !important;}";
+        // Emit the brand variables whenever the theme is not the plain default,
+        // or the admin overrode the brand color. (app.css carries the default
+        // teal values, so the plain-default case needs no extra file.)
+        if (! $isDefaultTheme || $hasColorOverride) {
+            $css .= \App\Support\Theme::rootVariables()
+                // The site's default accent is teal; remap those utility classes
+                // (header nav, footer, blog UI) to the active theme's brand so a
+                // non-default theme recolors the whole site without markup edits.
+                .'.bg-teal-600{background-color:var(--brand) !important;}'
+                .'.bg-teal-700{background-color:var(--brand-dark) !important;}'
+                .'.text-teal-600,.text-teal-700,.text-teal-800{color:var(--brand-strong) !important;}'
+                .'.hover\\:text-teal-600:hover,.hover\\:text-teal-700:hover{color:var(--brand-strong) !important;}'
+                .'.bg-teal-50{background-color:var(--brand-tint) !important;}'
+                .'.border-teal-200{border-color:var(--brand) !important;}'
+                .'.after\\:bg-teal-600::after{background-color:var(--brand) !important;}'
+                .'.hover\\:bg-teal-700:hover{background-color:var(--brand-dark) !important;}'
+                // Legacy indigo utilities (retained ecommerce views) follow the brand too.
+                .'.bg-indigo-600{background-color:var(--brand) !important;}'
+                .'.text-indigo-600{color:var(--brand) !important;}'
+                .'.hover\\:text-indigo-600:hover{color:var(--brand) !important;}'
+                .'.border-indigo-600{border-color:var(--brand) !important;}'
+                .'.ring-indigo-600{--tw-ring-color:var(--brand) !important;}'
+                .'.focus\\:ring-indigo-500:focus,.focus\\:border-indigo-500:focus{--tw-ring-color:var(--brand) !important;border-color:var(--brand) !important;}'
+                .'.hover\\:bg-indigo-700:hover,.hover\\:bg-indigo-500:hover{background-color:var(--brand-dark) !important;}';
         }
 
         if ($saleBadge) {
@@ -351,11 +368,11 @@ if (! function_exists('theme_css_href')) {
         }
 
         if ($radiusValue !== null) {
-            $css .= ".rounded,.rounded-md,.rounded-lg,.rounded-xl{border-radius:{$radiusValue} !important;}";
+            $css .= ".rounded,.rounded-md,.rounded-lg,.rounded-xl,.rounded-2xl,.rounded-3xl{border-radius:{$radiusValue} !important;}";
         }
 
         if (! $cardShadow) {
-            $css .= 'article.group:hover{box-shadow:none !important;}';
+            $css .= 'article.group:hover,a.group:hover{box-shadow:none !important;}';
         }
 
         if ($css === '') {

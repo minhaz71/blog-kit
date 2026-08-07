@@ -10,7 +10,7 @@ use Spatie\Permission\PermissionRegistrar;
 /**
  * Provision the per-screen access_* permissions and grant sensible defaults to
  * the built-in roles, so production picks up granular RBAC automatically on
- * `shopkit:update`. Additive and idempotent: it only ADDS permissions to
+ * `blogkit:update`. Additive and idempotent: it only ADDS permissions to
  * existing roles (never revokes), so no signed-in staff member loses access —
  * they simply gain the granular equivalents of what their role already did.
  */

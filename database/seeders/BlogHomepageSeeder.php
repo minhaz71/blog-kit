@@ -34,6 +34,12 @@ class BlogHomepageSeeder extends Seeder
                 'settings' => ['limit' => 6],
             ],
             [
+                'type' => 'post_categories',
+                'title' => 'Browse by topic',
+                'sort_order' => 25,
+                'settings' => ['limit' => 8],
+            ],
+            [
                 'type' => 'newsletter',
                 'title' => 'Get new posts by email',
                 'sort_order' => 30,

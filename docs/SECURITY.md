@@ -1,6 +1,6 @@
 # Security System
 
-ShopKit ships a Wordfence-style, multi-layer security system — an application firewall, real-time
+Hemdox BlogKit ships a Wordfence-style, multi-layer security system — an application firewall, real-time
 threat intelligence, login/brute-force protection, malware + integrity scanning, dependency CVE
 monitoring, intrusion alerts, and a posture-scoring dashboard. Everything is self-hosted and uses
 free data sources; there is no paid tier or external service dependency.

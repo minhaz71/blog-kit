@@ -223,7 +223,7 @@
                 <h3>Find &amp; replace</h3>
                 <p class="ist-help">
                     Bulk-fix alt, title, and caption text across every product image.
-                    Example: replace "IMG_2026" with "IQOS TEREA Amber Flavor UAE". Case-sensitive.
+                    Example: replace "IMG_2026" with "sourdough-bread-recipe". Case-sensitive.
                 </p>
 
                 <div class="ist-fields-grid">
@@ -233,7 +233,7 @@
                     </label>
                     <label class="ist-field">
                         <span>Replace with</span>
-                        <input type="text" class="ist-input" wire:model="replaceText" placeholder="IQOS TEREA Amber Flavor UAE">
+                        <input type="text" class="ist-input" wire:model="replaceText" placeholder="sourdough bread recipe">
                     </label>
                 </div>
 

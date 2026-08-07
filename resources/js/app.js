@@ -85,8 +85,34 @@ window.shopkit = {
     },
 };
 
+// Guest pages are served from the full-page cache with ANOTHER visitor's CSRF
+// token baked in. Fetch a fresh token for this session so forms (newsletter,
+// contact, login) never 419 on cached HTML. This is independent of the store's
+// /cart/count endpoint, so a blog install (ecommerce module off) keeps working
+// forms without ever touching an ecommerce route.
+async function refreshCsrfToken() {
+    try {
+        const response = await fetch('/csrf-token', { headers: { Accept: 'application/json' } });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.token) {
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            if (meta) meta.content = data.token;
+            document.querySelectorAll('input[name="_token"]').forEach((el) => (el.value = data.token));
+        }
+    } catch {
+        // Non-fatal — never break the page over a token refresh.
+    }
+}
+
 Alpine.start();
-window.shopkit.hydrateCartCount();
+refreshCsrfToken();
+
+// Cart badge hydration only runs when the ecommerce module is on. A blog install
+// skips the /cart/count request entirely, so the store never slows the blog.
+if (document.body.dataset.ecommerce === '1') {
+    window.shopkit.hydrateCartCount();
+}
 
 // Floating WhatsApp button: reveal after its configured delay (works on
 // cached pages — the element is static, only the reveal is client-side).
