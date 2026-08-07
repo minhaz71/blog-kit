@@ -142,6 +142,30 @@ If `npm run build` is "Killed" (low RAM):
 cd $APP && NODE_OPTIONS=--max-old-space-size=2048 npm run build
 ```
 
+> ⚠️ **ALWAYS flush caches right after building.** `@vite` bakes the asset
+> *hash* (e.g. `app-mSCKIL2S.css`) into the page HTML. This app caches rendered
+> guest pages (GuestPageCache) and LiteSpeed caches HTML at the edge. A rebuild
+> makes a **new** hash and **deletes the old file**, so any cached page then
+> points at a missing file → **CSS 404 → the whole site looks unstyled**. After
+> every build run:
+>
+> ```bash
+> cd $APP && chown -R $OWNER:$GROUP public/build \
+>   && sudo -u $OWNER $PHP artisan optimize:clear \
+>   && sudo -u $OWNER $PHP artisan cache:clear \
+>   && (rm -rf /usr/local/lsws/cachedata/* 2>/dev/null; systemctl restart lsws)
+> ```
+> (If `/usr/local/lsws/cachedata/` doesn't exist, flush via
+> CyberPanel → Manage → LiteSpeed Cache → Flush.) Then reload in an **incognito**
+> window to bypass your browser cache.
+
+Verify manifest ↔ built file ↔ served HTML all agree (all three must show the
+same hash, and the file must be `200`):
+
+```bash
+cd $APP && CSS=$($PHP -r '$m=json_decode(file_get_contents("public/build/manifest.json"),true); echo $m["resources/css/app.css"]["file"];'); echo "manifest: $CSS"; curl -sk -o /dev/null -w "file=%{http_code}\n" -H "Host: $DOMAIN" "https://127.0.0.1/build/$CSS"; echo -n "page refs: "; curl -sk "https://$DOMAIN/" | grep -oE 'assets/app-[A-Za-z0-9_]+\.css' | head -1
+```
+
 ---
 
 ## 8. Create the admin user
@@ -220,12 +244,16 @@ cd $APP && git pull \
   && COMPOSER_ALLOW_SUPERUSER=1 $PHP $(command -v composer) install --no-dev --optimize-autoloader \
   && npm ci && npm run build \
   && $PHP artisan migrate --force \
-  && $PHP artisan optimize:clear \
-  && chown -R $(stat -c '%U' /home/$DOMAIN):$(stat -c '%G' /home/$DOMAIN) "$APP"
+  && chown -R $OWNER:$GROUP "$APP" \
+  && sudo -u $OWNER $PHP artisan optimize:clear \
+  && sudo -u $OWNER $PHP artisan cache:clear \
+  && (rm -rf /usr/local/lsws/cachedata/* 2>/dev/null; systemctl restart lsws)
 ```
 
-Then flush the LiteSpeed cache (CyberPanel → Manage → LiteSpeed Cache → Flush)
-or `systemctl restart lsws`, and hard-refresh the browser.
+The `cache:clear` + LiteSpeed flush at the end are **required after a rebuild**
+(otherwise cached HTML serves the old asset hash → 404 → unstyled). Then
+hard-refresh in incognito. If `/usr/local/lsws/cachedata/` doesn't exist, flush
+via CyberPanel → Manage → LiteSpeed Cache → Flush.
 
 ---
 
@@ -238,8 +266,10 @@ or `systemctl restart lsws`, and hard-refresh the browser.
 | `-bash: !',...: event not found` | `!` in a double-quoted command triggers bash history | Single-quote the whole `--execute` (step 8) |
 | `file_put_contents(.../storage/framework/sessions/…): No such file or directory` | Empty storage dirs not created by git clone | `mkdir -p storage/framework/{sessions,views,cache/data}` (step 5) |
 | 500 "Something went wrong", nothing new in `laravel.log` | Old error was cached / log written by root | Temporarily `APP_DEBUG=true` + `optimize:clear`, reload, read error, revert |
-| Site loads but design is broken / unstyled | `public/build` stale vs templates | `npm ci && npm run build` on the server (step 7) + flush LiteSpeed cache |
-| Styling still old after rebuild | LiteSpeed edge cache serving old HTML | CyberPanel → LiteSpeed Cache → Flush, or `systemctl restart lsws` |
+| Site loads but design is broken / unstyled; a CSS/JS request 404s (`app-XXXX.css`) | Cached HTML (app GuestPageCache **and** LiteSpeed) still points at an **old asset hash** that a later `npm run build` deleted | Rebuild, then flush BOTH caches: `optimize:clear` + `cache:clear` + `rm -rf /usr/local/lsws/cachedata/*` + `systemctl restart lsws`; reload in incognito. Do this after EVERY build (step 7). |
+| Design still stale after rebuild + app cache clear | LiteSpeed edge cache serving old HTML | CyberPanel → LiteSpeed Cache → Flush (or `rm -rf /usr/local/lsws/cachedata/*; systemctl restart lsws`) |
+| Logo/name shows **"Laravel"** instead of the site name | Fresh DB has no `general.site_name`; falls back to `APP_NAME` | Set it in Admin → General settings → Site name, or `APP_NAME="Your Blog"` in `.env` + `optimize:clear` |
+| `storage:link` → "The [public/storage] link already exists" | Symlink was already created | Harmless — ignore |
 | Save button spins / permission denied writing cache | Files owned by root | `chown -R <siteuser>` + `chmod -R 775 storage bootstrap/cache` (step 9) |
 | 403 / 404 on every page | Document root not pointing at `/public` | Set `docRoot $VH_ROOT/public_html/public` (step 10) |
 | `Cannot load Zend OPcache - it was already loaded` | Duplicate opcache line in the CLI php.ini | Harmless — ignore |
