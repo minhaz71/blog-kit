@@ -93,8 +93,11 @@ class ThumbnailService
         }
 
         // Cluster identity: a shared style + theme + brand cue so every article
-        // in a cluster reads as one visual set on the catalogue.
-        $cluster = $post->relationLoaded('cluster') ? $post->cluster : $post->cluster()->first();
+        // in a cluster reads as one visual set on the catalogue. Skip the query
+        // entirely for an unclustered post (the common case).
+        $cluster = $post->content_cluster_id
+            ? ($post->relationLoaded('cluster') ? $post->cluster : $post->cluster()->first())
+            : null;
 
         $prompt = $this->prompt($title, [
             'custom' => $opts['custom'] ?? null,

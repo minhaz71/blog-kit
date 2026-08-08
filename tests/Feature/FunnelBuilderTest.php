@@ -97,8 +97,8 @@ class FunnelBuilderTest extends TestCase
             // Invented link target — no longer fatal: the idea survives with
             // its invalid target dropped (the link agent links it at write time).
             ['title' => 'Choosing your first heated tobacco device', 'funnel_stage' => 'middle', 'primary_keyword' => 'first device', 'outline' => ['a', 'b', 'c'], 'link_targets' => ['https://example.com/not-ours']],
-            // Wrong funnel stage.
-            ['title' => 'A totally different topic entirely here', 'funnel_stage' => 'bottom', 'primary_keyword' => 'k', 'outline' => ['a', 'b', 'c'], 'link_targets' => [route('product.show', 'terea-amber')]],
+            // Wrong funnel stage (top/middle/bottom are valid; this is not).
+            ['title' => 'A totally different topic entirely here', 'funnel_stage' => 'sideways', 'primary_keyword' => 'k', 'outline' => ['a', 'b', 'c'], 'link_targets' => [route('product.show', 'terea-amber')]],
         ], ['How to clean an IQOS ILUMA properly']);
 
         $this->assertCount(2, $passed);
