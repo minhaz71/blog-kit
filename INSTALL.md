@@ -22,6 +22,29 @@ export PHP=/usr/local/lsws/lsphp83/bin/php
 
 ---
 
+## Quick install (one script) — recommended
+
+After creating the website + database in CyberPanel and cloning the repo into
+`public_html` (steps 1–2 below), run the **safe, idempotent** installer. It does
+composer, .env, storage dirs, migrate/seed, assets, admin, permissions, **and the
+background processes (scheduler + queue worker) that a fresh CyberPanel site is
+missing** — all as the correct site user (never root-owned). Re-runnable; only
+adds/fixes, never drops data.
+
+```bash
+cd /home/example.com/public_html
+DOMAIN=example.com \
+  DB_DATABASE=your_db DB_USERNAME=your_user DB_PASSWORD='your_pass' \
+  ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='YourStrongPass!' \
+  bash scripts/install.sh
+```
+
+Then set the vHost **docRoot to `$VH_ROOT/public_html/public`** (step 10) and issue
+SSL. The manual steps below explain each thing the script does and the errors it
+prevents.
+
+---
+
 ## 1. CyberPanel UI (before SSH)
 
 1. **Websites → Create Website** — your domain, **PHP 8.3**.
@@ -196,6 +219,13 @@ chmod -R 775 "$APP/storage" "$APP/bootstrap/cache"
 To avoid re-rooting files, run future artisan as the site user:
 `sudo -u <siteuser> $PHP artisan <cmd>`
 
+Also allow the site user to run git in the app dir (else the one-click **Update**
+button fails with *"detected dubious ownership"*):
+
+```bash
+sudo -u $OWNER git config --global --add safe.directory "$APP"
+```
+
 ---
 
 ## 10. Point the document root at `/public`
@@ -216,11 +246,36 @@ systemctl restart lsws
 
 ---
 
-## 11. Scheduler cron (scheduled publishing, sitemap, daily backups)
+## 11. Background processes — scheduler cron + queue worker  ← REQUIRED
+
+> ⚠️ **A fresh CyberPanel site runs NEITHER of these, so without this step:
+> scheduled backups never run, scheduled posts never publish, and network
+> Update / Push / Pull jobs sit in the queue forever ("nothing happens").**
+
+Two cron lines. **Both MUST run as the site user** (`sudo -u <siteuser>`) —
+running `schedule:run` as root recreates the root-owned-files problem that 500s
+the site (backups/logs written by root).
 
 ```bash
-( crontab -l 2>/dev/null; echo "* * * * * $PHP $APP/artisan schedule:run >> /dev/null 2>&1" ) | crontab -
+OWNER=$(stat -c '%U' /home/$DOMAIN)
+( crontab -l 2>/dev/null | grep -v 'artisan schedule:run' | grep -v 'artisan queue:work'; \
+  echo "* * * * * cd $APP && sudo -u $OWNER $PHP artisan schedule:run >> /dev/null 2>&1"; \
+  echo "* * * * * cd $APP && sudo -u $OWNER $PHP artisan queue:work --stop-when-empty --max-time=55 >> /dev/null 2>&1" \
+) | crontab -
 ```
+
+- **`schedule:run`** fires the scheduled commands in `routes/console.php`
+  (daily DB backup, weekly full backup, prune, scheduled-post publishing, sitemap,
+  security scan…).
+- **`queue:work`** drains the `jobs` table every minute (`QUEUE_CONNECTION=database`
+  by default). This is what makes the network **Update / Push / Pull** buttons and
+  AI fan-out actually execute. `--stop-when-empty --max-time=55` keeps it inside
+  the minute so runs never overlap.
+  - Alternative for very low volume: set `QUEUE_CONNECTION=sync` in `.env` (+
+    `optimize:clear`) so jobs run inline in the web request — no worker needed.
+
+Verify: `sudo -u $OWNER $PHP artisan backup:run --type=full` should create a zip,
+and `sudo -u $OWNER $PHP artisan queue:work --once` should drain one job.
 
 ---
 
@@ -280,3 +335,9 @@ via CyberPanel → Manage → LiteSpeed Cache → Flush.
 | Save button spins / permission denied writing cache | Files owned by root | `chown -R <siteuser>` + `chmod -R 775 storage bootstrap/cache` (step 9) |
 | 403 / 404 on every page | Document root not pointing at `/public` | Set `docRoot $VH_ROOT/public_html/public` (step 10) |
 | `Cannot load Zend OPcache - it was already loaded` | Duplicate opcache line in the CLI php.ini | Harmless — ignore |
+| Backups never run automatically | Scheduler cron missing (fresh CyberPanel has none) | Add the `schedule:run` cron **as the site user** (step 11) |
+| Network **Update / Push / Pull** does nothing; jobs pile up | No queue worker (`QUEUE_CONNECTION=database`) | Add the `queue:work` cron (step 11) **or** set `QUEUE_CONNECTION=sync` |
+| One-click **Update** fails: `detected dubious ownership in repository` | git refuses a repo owned by another user | `sudo -u $OWNER git config --global --add safe.directory "$APP"` (step 9) |
+| Update fails: `requires php ^8.x` during its composer step | `blogkit:update` shelled `composer` under PHP 7.4 | Update manually via the Redeploy block, or ensure `composer` resolves to 8.3 |
+| New menu items (Keyword Research, Research settings…) missing after pull | Their `access_*` permission row didn't exist yet | `php artisan migrate` (seeds them), then `optimize:clear`; or re-grant via the tinker one-liner in the notes |
+| Scheduled tasks recreate root-owned files → later 500s | `schedule:run` cron ran as **root**, not the site user | Re-add the cron with `sudo -u <siteuser>` (step 11) |
