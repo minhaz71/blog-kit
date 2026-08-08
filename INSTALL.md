@@ -245,6 +245,7 @@ cd $APP && git pull \
   && npm ci && npm run build \
   && $PHP artisan migrate --force \
   && sudo -u $OWNER $PHP artisan blogkit:backfill-clusters \
+  && sudo -u $OWNER $PHP artisan blogkit:build-categories \
   && chown -R $OWNER:$GROUP "$APP" \
   && sudo -u $OWNER $PHP artisan optimize:clear \
   && sudo -u $OWNER $PHP artisan cache:clear \

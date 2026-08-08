@@ -227,9 +227,25 @@ existing clusters; new batches then self-categorise.
 
 ---
 
-## Status
+## Status — IMPLEMENTED ✅ (Phases A–E)
 
-Plan finalized with the two decisions above. **No code written yet** — awaiting a
-"build it" go-ahead. When you give it, build order is A → B → C → D → E, all
-additive/nullable (pull-safe), then `php artisan blogkit:build-categories` on the
-server to populate the tree from existing clusters.
+Built as a core feature on branch `claude/blogkit-home-page-design-843738`,
+committed per phase, browser-verified (mother/sub menu + descendant-aggregating
+archive). All migrations additive/nullable → pull-safe.
+
+- **A** `post_categories.{parent_id,sort_order,is_active,show_in_menu}` +
+  `content_clusters.post_category_id`; PostCategory tree; admin fields; archive
+  aggregates descendants + shows sub-chips.
+- **B** `CategoryPlanner` (AI-grouped mothers, deterministic fallback), cap 20,
+  dedup; `blogkit:build-categories` command + "Build category tree" button.
+- **C** `BlogPublisher` auto-files each post into its cluster's category
+  (auto-created under a default mother on a blank site), refresh-safe.
+- **D** header menu auto-builds mother → sub dropdowns (blog mode) / a "Blog"
+  dropdown (store mode); `navigation.auto_blog_categories` toggle.
+- **E** Content Strategy settings: `funnel.auto_categorize`,
+  `funnel.max_categories`, `funnel.max_root_categories`; guardrails (cap
+  fallback, dedup, no thin archives).
+
+**Deploy:** after `git pull` + `migrate`, run `php artisan blogkit:build-categories`
+to build the tree from existing clusters (idempotent). New AI batches then
+self-categorize.
