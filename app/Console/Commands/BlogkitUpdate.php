@@ -89,7 +89,19 @@ class BlogkitUpdate extends Command
             $branch = $this->option('branch') ?: Version::gitBranch();
             $this->exec(['git', 'fetch', '--tags', '--quiet']);
             $this->exec(['git', 'checkout', $branch]);
-            $this->exec(['git', 'pull', '--ff-only', 'origin', $branch]);
+            try {
+                $this->exec(['git', 'pull', '--ff-only', 'origin', $branch]);
+            } catch (\Throwable $e) {
+                // Fast-forward impossible — the remote history was rewritten
+                // (e.g. a commit-message cleanup / force-push). A full backup was
+                // already taken above, so realign HARD to the remote. This only
+                // touches tracked CODE files; the database and uploaded media
+                // (storage, gitignored) are untouched, and rollback restores the
+                // previous commit + database if anything downstream fails.
+                $this->line('  Fast-forward not possible (remote history changed) — realigning to origin/'.$branch.'.');
+                $this->exec(['git', 'fetch', 'origin', $branch, '--quiet']);
+                $this->exec(['git', 'reset', '--hard', 'origin/'.$branch]);
+            }
 
             // ── Step 5: dependencies (prod, optimized) ─────────────────
             $this->step('Installing PHP dependencies…');
