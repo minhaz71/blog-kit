@@ -87,6 +87,13 @@ class BlogkitUpdate extends Command
         try {
             // ── Step 4: pull code ──────────────────────────────────────
             $branch = $this->option('branch') ?: Version::gitBranch();
+            // Non-technical owners run this as the site user; pre-authorize the
+            // repo so git never refuses with "detected dubious ownership".
+            try {
+                $this->exec(['git', 'config', '--global', '--add', 'safe.directory', base_path()]);
+            } catch (\Throwable) {
+                // best-effort; continue
+            }
             $this->exec(['git', 'fetch', '--tags', '--quiet']);
             $this->exec(['git', 'checkout', $branch]);
             try {
@@ -105,7 +112,7 @@ class BlogkitUpdate extends Command
 
             // ── Step 5: dependencies (prod, optimized) ─────────────────
             $this->step('Installing PHP dependencies…');
-            $this->exec(['composer', 'install', '--no-dev', '--optimize-autoloader', '--no-interaction'], 900);
+            $this->exec([...$this->composer(), 'install', '--no-dev', '--optimize-autoloader', '--no-interaction'], 900);
 
             // ── Step 6: additive migrations (destructive ones blocked) ─
             $this->step('Running database migrations (additive only)…');
@@ -137,9 +144,20 @@ class BlogkitUpdate extends Command
         return self::SUCCESS;
     }
 
-    /** Rebuild the frontend bundle if Node is present; otherwise assume CI/committed build. */
+    /**
+     * The repo ships a committed/CI-built public/build, so a frontend rebuild is
+     * optional. Prefer the committed build; only run npm if it's actually
+     * missing, and NEVER let an npm hiccup (permissions, RAM, registry) fail the
+     * whole update — the committed build is the fallback.
+     */
     protected function rebuildAssets(): void
     {
+        if (is_file(public_path('build/manifest.json'))) {
+            $this->line('  Using committed/CI-built assets in public/build (skipping npm).');
+
+            return;
+        }
+
         $hasNode = (function (): bool {
             $p = new Process(['npm', '--version']);
             $p->run();
@@ -153,9 +171,32 @@ class BlogkitUpdate extends Command
             return;
         }
 
-        $this->step('Building frontend assets…');
-        $this->exec(['npm', 'ci', '--no-audit', '--no-fund'], 900);
-        $this->exec(['npm', 'run', 'build'], 900);
+        try {
+            $this->step('Building frontend assets…');
+            $this->exec(['npm', 'ci', '--no-audit', '--no-fund'], 900);
+            $this->exec(['npm', 'run', 'build'], 900);
+        } catch (\Throwable $e) {
+            $this->line('  npm build failed ('.mb_substr($e->getMessage(), 0, 100).') — keeping the committed build.');
+        }
+    }
+
+    /**
+     * Run Composer THROUGH the current PHP binary so it can never fall back to a
+     * system default PHP 7.4 that fails with "requires php ^8.x" (the classic
+     * CyberPanel update failure). Falls back to a bare `composer` only if no phar
+     * is found on the usual paths.
+     *
+     * @return array<int, string>
+     */
+    protected function composer(): array
+    {
+        foreach (['/usr/local/bin/composer', '/usr/bin/composer', base_path('composer.phar')] as $phar) {
+            if (is_file($phar)) {
+                return [PHP_BINARY, $phar];
+            }
+        }
+
+        return ['composer'];
     }
 
     /** Restore code + database to the pre-update state. */
@@ -166,7 +207,7 @@ class BlogkitUpdate extends Command
         if ($this->rollbackCommit) {
             try {
                 $this->exec(['git', 'reset', '--hard', $this->rollbackCommit]);
-                $this->exec(['composer', 'install', '--no-dev', '--optimize-autoloader', '--no-interaction'], 900);
+                $this->exec([...$this->composer(), 'install', '--no-dev', '--optimize-autoloader', '--no-interaction'], 900);
                 $this->line('  Code restored to '.substr($this->rollbackCommit, 0, 8).'.');
             } catch (\Throwable $e) {
                 $this->error('  Code rollback error: '.$e->getMessage());
