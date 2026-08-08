@@ -210,14 +210,26 @@ existing clusters; new batches then self-categorise.
 
 ---
 
-## Open questions before building
+## Decisions locked in
 
-1. **Mother categories:** let the AI group clusters into mothers automatically,
-   or do you want to pre-name the mothers (e.g. Devices / Flavors / Health /
-   Guides) and let clusters slot under them?
-2. **Bottom-funnel:** keep decision-stage posts in their topic category (topic-
-   first), or also roll them into a cross-cutting **"Guides & Reviews"** mother?
-3. **Cap split:** 6 mothers × ~3 subs, or fewer mothers with more subs — any
-   preference within the 20 total?
-4. **Menu width:** how many mother categories in the top bar before "More"
-   (default 6)?
+1. **Mother categories → AI-grouped.** The `CategoryPlanner` runs one AI pass to
+   group clusters into ≤`max_root_categories` broad, non-overlapping mothers and
+   names them; the admin can rename afterwards. (Phase B step 1.)
+2. **Bottom-funnel → topic-first.** Decision-stage posts (buying guides, "best
+   X") stay in their topic category; funnel stage is metadata only, never its
+   own category. The "Guides & Reviews" hub and literal funnel-categories are
+   **dropped** from scope.
+
+## Still-open (sensible defaults chosen; change any before/at build)
+
+3. **Cap split:** default ≤6 mothers, remaining budget as subs (≤20 total).
+4. **Menu width:** default top 6 mothers in the bar, rest under "More".
+
+---
+
+## Status
+
+Plan finalized with the two decisions above. **No code written yet** — awaiting a
+"build it" go-ahead. When you give it, build order is A → B → C → D → E, all
+additive/nullable (pull-safe), then `php artisan blogkit:build-categories` on the
+server to populate the tree from existing clusters.
