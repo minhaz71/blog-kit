@@ -27,7 +27,10 @@ class NetworkPostIngestor
 
         return DB::transaction(function () use ($hubKey, $origin, $data) {
             $title = trim((string) ($data['title'] ?? 'Untitled article'));
-            $body = (new BlogPublisher)->enforceClassWhitelist((string) ($data['content'] ?? ''));
+            // Store any bundled in-body images locally and rewrite their URLs
+            // BEFORE sanitizing, so the spoke serves them from its own disk.
+            $rawContent = $this->ingestInlineImages($hubKey, $data, (string) ($data['content'] ?? ''));
+            $body = (new BlogPublisher)->enforceClassWhitelist($rawContent);
             $excerpt = trim((string) ($data['excerpt'] ?? ''));
             $words = str_word_count(strip_tags($body));
 
@@ -39,7 +42,7 @@ class NetworkPostIngestor
                 'title' => $title,
                 'excerpt' => mb_substr($excerpt, 0, 500),
                 'content' => $body,
-                'post_category_id' => $this->resolveCategory($data['category'] ?? null),
+                'post_category_id' => $this->resolveCategory($data['category'] ?? null, $data['category_path'] ?? null),
                 'author_id' => $this->resolveAuthor($data['author'] ?? null),
                 'reading_time' => max(1, (int) ceil($words / 200)),
                 'status' => $status,
@@ -47,7 +50,7 @@ class NetworkPostIngestor
                 'featured_image_alt' => trim((string) ($data['featured_image_alt'] ?? '')) ?: null,
                 'featured_image' => $this->resolveImage($hubKey, $data, $post?->featured_image),
                 'network_origin' => $origin,
-            ];
+            ] + $this->clusterAttributes($data);
 
             if ($post) {
                 if ($post->trashed()) {
@@ -88,12 +91,150 @@ class NetworkPostIngestor
                 ->all();
             $post->tags()->sync($tagIds);
 
+            // Wire the cluster graph: point this post at its pillar (mapped from
+            // the hub's pillar id) and, if it IS a pillar, adopt it on its cluster.
+            $this->stitchCluster($hubKey, $post, $data);
+
             return $post;
         });
     }
 
-    protected function resolveCategory(?array $category): ?int
+    /**
+     * Cluster/funnel columns from the payload's content_meta, resolving the
+     * cluster name to a LOCAL ContentCluster. pillar_post_id is set later by
+     * stitchCluster (it needs the pillar's local id).
+     */
+    protected function clusterAttributes(array $data): array
     {
+        $meta = (array) ($data['content_meta'] ?? []);
+        $out = [];
+
+        $clusterName = trim((string) ($meta['cluster'] ?? ''));
+        if ($clusterName !== '') {
+            $out['cluster'] = $clusterName;
+            $out['content_cluster_id'] = \App\Models\ContentCluster::resolve($clusterName)->id;
+        }
+        if (in_array($meta['content_role'] ?? '', ['pillar', 'spoke'], true)) {
+            $out['content_role'] = $meta['content_role'];
+        }
+        if (in_array($meta['funnel_stage'] ?? '', ['top', 'middle', 'bottom'], true)) {
+            $out['funnel_stage'] = $meta['funnel_stage'];
+        }
+        if (trim((string) ($meta['primary_keyword'] ?? '')) !== '') {
+            $out['primary_keyword'] = (string) $meta['primary_keyword'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Resolve pillar linkage using the hub's pillar post id mapped to the local
+     * copy via network_origin; and when this post is a pillar, record it on its
+     * cluster + point sibling spokes at it. Self-heals across push order.
+     */
+    protected function stitchCluster(string $hubKey, Post $post, array $data): void
+    {
+        $pillarHubId = $data['content_meta']['pillar_network_post_id'] ?? null;
+
+        if ($pillarHubId) {
+            $pillar = Post::where('network_origin', $hubKey.':'.$pillarHubId)->first();
+            if ($pillar && $post->pillar_post_id !== $pillar->id) {
+                $post->update(['pillar_post_id' => $pillar->id]);
+            }
+        }
+
+        if ($post->content_role === 'pillar' && $post->content_cluster_id) {
+            $cluster = \App\Models\ContentCluster::find($post->content_cluster_id);
+            if ($cluster && $cluster->pillar_post_id !== $post->id) {
+                $cluster->update(['pillar_post_id' => $post->id]);
+            }
+            Post::where('content_cluster_id', $post->content_cluster_id)
+                ->where('content_role', 'spoke')
+                ->whereNull('pillar_post_id')
+                ->update(['pillar_post_id' => $post->id]);
+        }
+    }
+
+    /**
+     * Store bundled in-body images on the local public disk and rewrite their
+     * <img src> to the local URL, so the spoke serves them itself (never hot-
+     * links back to the hub). External/unbundled images are left untouched.
+     */
+    protected function ingestInlineImages(string $hubKey, array $data, string $content): string
+    {
+        $images = (array) ($data['inline_images'] ?? []);
+        if ($images === []) {
+            return $content;
+        }
+
+        $disk = Storage::disk('public');
+        $hubDir = Str::slug($hubKey) ?: 'hub';
+
+        foreach ($images as $img) {
+            $src = (string) ($img['src'] ?? '');
+            $b64 = (string) ($img['data'] ?? '');
+            if ($src === '' || $b64 === '') {
+                continue;
+            }
+
+            $bytes = base64_decode($b64, true);
+            if ($bytes === false || $bytes === '') {
+                continue;
+            }
+            $info = @getimagesizefromstring($bytes);
+            if ($info === false) {
+                continue; // never write non-image bytes
+            }
+
+            $ext = image_type_to_extension($info[2], false) ?: 'img';
+            $name = Str::slug(pathinfo((string) ($img['filename'] ?? 'image'), PATHINFO_FILENAME)) ?: 'image';
+            $fingerprint = substr((string) ($img['sha256'] ?? hash('sha256', $bytes)), 0, 12);
+            $relative = 'network/'.$hubDir.'/inline/'.$name.'-'.$fingerprint.'.'.$ext;
+
+            $disk->put($relative, $bytes);
+
+            // Root-relative so it resolves on the spoke's own domain.
+            $content = str_replace($src, '/storage/'.$relative, $content);
+        }
+
+        return $content;
+    }
+
+    /**
+     * File the post under its category, rebuilding the mother→sub tree from the
+     * ancestor chain when the hub sent one. Parent is set only when a level is
+     * first created — an existing spoke category is never reparented. Falls back
+     * to the flat name/slug for older hubs that don't send a path.
+     *
+     * @param  array<int, array{name?:string, slug?:string}>|null  $path  root→leaf
+     */
+    protected function resolveCategory(?array $category, ?array $path = null): ?int
+    {
+        if (is_array($path) && $path !== []) {
+            $parentId = null;
+            $leafId = null;
+
+            foreach ($path as $node) {
+                $name = trim((string) ($node['name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $slug = (string) ($node['slug'] ?? Str::slug($name));
+
+                $cat = PostCategory::firstOrCreate(
+                    ['slug' => $slug],
+                    ['name' => $name, 'parent_id' => $parentId, 'is_active' => true, 'show_in_menu' => true],
+                );
+
+                $parentId = $cat->id;
+                $leafId = $cat->id;
+            }
+
+            if ($leafId !== null) {
+                return $leafId;
+            }
+        }
+
         if (! $category || empty($category['name'])) {
             return null;
         }
