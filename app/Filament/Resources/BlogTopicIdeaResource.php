@@ -195,6 +195,16 @@ class BlogTopicIdeaResource extends Resource
                 ->native(false)
                 ->placeholder('No delay — all live as soon as written')
                 ->helperText('Staggers publishing: first article at batch start, each next one interval later (the blog cron publishes them on schedule). Applies in publish mode.'),
+            \Filament\Forms\Components\Toggle::make('generate_images')
+                ->label('Generate AI thumbnails')
+                ->default(true)
+                ->helperText('Create a featured image for each article with your configured image provider. Generated BEFORE the network push, so it ships to connected sites too.'),
+            Select::make('image_style')
+                ->label('Thumbnail style')
+                ->options(collect(\App\Services\Ai\ThumbnailService::STYLE_PRESETS)->keys()->mapWithKeys(fn ($k) => [$k => ucfirst($k)])->all())
+                ->default('editorial')
+                ->native(false)
+                ->visible(fn (Get $get): bool => (bool) $get('generate_images')),
         ];
     }
 
@@ -219,6 +229,8 @@ class BlogTopicIdeaResource extends Resource
             'blog_category_id' => $data['blog_category_id'] ?? null,
             'publish_mode' => $data['publish_mode'] ?? 'draft',
             'publish_interval_minutes' => $data['publish_interval_minutes'] ?? null,
+            'generate_images' => $data['generate_images'] ?? true,
+            'image_style' => $data['image_style'] ?? null,
             'link_scope' => 'ecommerce',
             'funnel_rounds' => (int) $ideas->max('verified_rounds'), // marks it a funnel batch
             'status' => 'processing',

@@ -207,7 +207,8 @@ class WriteAiBlogPost implements ShouldQueue
         AiActivityLog::write($batch->id, $item->id, 'publish',
             "🌐 Queued \"{$post->title}\" to {$result['queued']} connected site(s)"
             .($deferred > 0 ? " — {$deferred} will receive it at its scheduled publish time (spoke has no scheduler)" : '')
-            .($result['skipped'] !== [] ? ' ('.count($result['skipped']).' inactive skipped)' : '').'.',
+            .($result['skipped'] !== [] ? ' ('.count($result['skipped']).' inactive skipped)' : '')
+            .'. Live links appear in Network → Sync status once delivered.',
             'success');
 
         // Version safety: warn when any target spoke is behind this hub — newer

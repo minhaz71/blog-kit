@@ -68,6 +68,11 @@ class NetworkSyncResource extends Resource
             ->columns([
                 TextColumn::make('post.title')->label('Post')->limit(40)->searchable()->sortable(),
                 TextColumn::make('site.name')->label('Site')->badge()->color('gray')->sortable(),
+                TextColumn::make('remote_url')->label('Live link')
+                    ->url(fn (NetworkPostLink $r): ?string => $r->remote_url, shouldOpenInNewTab: true)
+                    ->formatStateUsing(fn (?string $state): string => $state ? 'Open ↗' : '—')
+                    ->color('primary')
+                    ->placeholder('—'),
                 TextColumn::make('status')->badge()->color(fn (string $state): string => match ($state) {
                     'synced' => 'success',
                     'pending' => 'info',
