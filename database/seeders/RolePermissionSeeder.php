@@ -64,7 +64,7 @@ class RolePermissionSeeder extends Seeder
         // Content/SEO people edit content, products and SEO, but NOT AI
         // batches, AI settings or general settings (per the store owner's rule).
         $editor = array_values(array_diff(
-            array_merge(AdminAccess::keysForGroups(['Content', 'SEO']), ['access_products', 'access_categories']),
+            array_merge(AdminAccess::keysForGroups(['Content', 'Research', 'SEO']), ['access_products', 'access_categories']),
             ['access_ai_blog_batches'],
         ));
 
