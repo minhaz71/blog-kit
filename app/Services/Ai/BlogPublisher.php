@@ -65,7 +65,7 @@ class BlogPublisher
                 'title' => $title,
                 'excerpt' => mb_substr($excerpt, 0, 500),
                 'content' => $body,
-                'post_category_id' => $batch->blog_category_id,
+                'post_category_id' => $this->resolveCategoryId($item, $batch),
                 'author_id' => $batch->user_id
                     ?? User::query()->orderBy('id')->value('id'),
                 'reading_time' => max(1, (int) ceil($words / 200)),
@@ -84,6 +84,10 @@ class BlogPublisher
                 // unpublish a live, ranking article.
                 if ($batch->refresh) {
                     unset($attributes['title'], $attributes['status'], $attributes['published_at']);
+                    // Don't re-file a live, already-categorized article.
+                    if ($post->post_category_id) {
+                        unset($attributes['post_category_id']);
+                    }
                 }
                 $post->update($attributes);
             } else {
@@ -204,6 +208,30 @@ class BlogPublisher
         } elseif ($cluster->pillar_post_id && $post->pillar_post_id !== $cluster->pillar_post_id) {
             $post->update(['pillar_post_id' => $cluster->pillar_post_id]);
         }
+    }
+
+    /**
+     * Which category to file this post under:
+     *   1. its cluster's category (auto-creating one under the default mother
+     *      when the site is blank), when auto-categorize is on and the item
+     *      carries a cluster;
+     *   2. the batch's manually chosen category;
+     *   3. the blog's default category.
+     */
+    protected function resolveCategoryId(AiImportItem $item, $batch): ?int
+    {
+        $clusterName = trim((string) ($item->row['cluster'] ?? ''));
+
+        if ((bool) setting('blog.auto_categorize', true) && $clusterName !== '') {
+            $cluster = \App\Models\ContentCluster::resolve($clusterName);
+            try {
+                return app(CategoryPlanner::class)->categoryForCluster($cluster);
+            } catch (\Throwable) {
+                // Never let categorization break publishing — fall through.
+            }
+        }
+
+        return $batch->blog_category_id ?: optional(\App\Models\PostCategory::defaultCategory())->id;
     }
 
     /** Is this item affiliate content? (role, per-row links, or batch mode.) */

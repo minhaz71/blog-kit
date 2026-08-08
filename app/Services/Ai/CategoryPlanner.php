@@ -5,6 +5,7 @@ namespace App\Services\Ai;
 use App\Models\ContentCluster;
 use App\Models\Post;
 use App\Models\PostCategory;
+use App\Models\Setting;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -60,7 +61,7 @@ class CategoryPlanner
                     continue;
                 }
 
-                $sub = $this->resolveCategory($cluster->name, $mother->id, $sortSub++);
+                $sub = $this->resolveCategory($cluster->name, $mother->id, $sortSub++, reparentAuto: true);
                 if ($sub->wasRecentlyCreated) {
                     $subs++;
                 }
@@ -72,10 +73,20 @@ class CategoryPlanner
             $this->seedDescription($mother, null);
         }
 
-        $message = "Built {$mothers} mother + {$subs} sub-categories from {$clusters->count()} clusters"
-            .($capped > 0 ? " ({$capped} attached to a mother — {$maxTotal}-category cap reached)" : '').'.';
+        // File any still-uncategorized post onto its cluster's category. We only
+        // touch posts with NO category, so an admin's manual choice is safe.
+        $refiled = 0;
+        foreach (ContentCluster::whereNotNull('post_category_id')->get(['id', 'post_category_id']) as $c) {
+            $refiled += Post::where('content_cluster_id', $c->id)
+                ->whereNull('post_category_id')
+                ->update(['post_category_id' => $c->post_category_id]);
+        }
 
-        return ['mothers' => $mothers, 'subs' => $subs, 'linked' => $linked, 'capped' => $capped, 'message' => $message];
+        $message = "Built {$mothers} mother + {$subs} sub-categories from {$clusters->count()} clusters"
+            .($capped > 0 ? " ({$capped} attached to a mother — {$maxTotal}-category cap reached)" : '')
+            .($refiled > 0 ? "; filed {$refiled} post(s)" : '').'.';
+
+        return ['mothers' => $mothers, 'subs' => $subs, 'linked' => $linked, 'capped' => $capped, 'refiled' => $refiled, 'message' => $message];
     }
 
     /**
@@ -172,15 +183,28 @@ SYS;
         return PostCategory::where('slug', Str::slug(trim($name)) ?: 'general')->exists();
     }
 
-    /** Find (by slug) or create a category at the given level. */
-    protected function resolveCategory(string $name, ?int $parentId, int $sortOrder): PostCategory
+    /**
+     * Find (by slug) or create a category at the given level. When $reparentAuto
+     * is true, an existing sub that currently sits under the auto default mother
+     * (i.e. was auto-filed at publish) is moved to the AI-chosen mother — so the
+     * "Build category tree" pass can reorganize auto-created categories. An
+     * admin-organized category (any other parent, or a root) is never moved.
+     */
+    protected function resolveCategory(string $name, ?int $parentId, int $sortOrder, bool $reparentAuto = false): PostCategory
     {
         $name = trim($name) ?: 'General';
         $slug = Str::slug($name) ?: 'general';
 
         $existing = PostCategory::where('slug', $slug)->first();
         if ($existing) {
-            return $existing; // reuse as-is; never reparent an existing category
+            if ($reparentAuto && $parentId && $existing->id !== $parentId) {
+                $autoMotherId = (int) setting('blog.auto_mother_category_id');
+                if ($autoMotherId && $existing->parent_id === $autoMotherId) {
+                    $existing->update(['parent_id' => $parentId]);
+                }
+            }
+
+            return $existing;
         }
 
         return PostCategory::create([
@@ -191,6 +215,54 @@ SYS;
             'show_in_menu' => true,
             'sort_order' => $sortOrder,
         ]);
+    }
+
+    /**
+     * The default "mother" that auto-filed sub-categories live under until the
+     * AI grouping pass reorganizes them. Named after the site; id remembered in
+     * a setting so reparenting can find it.
+     */
+    public function defaultMother(): PostCategory
+    {
+        $id = (int) setting('blog.auto_mother_category_id');
+        if ($id && ($m = PostCategory::find($id))) {
+            return $m;
+        }
+
+        $name = trim((string) setting('general.site_name')) ?: 'Topics';
+        $mother = $this->resolveCategory($name, null, 0);
+        Setting::set('blog.auto_mother_category_id', $mother->id);
+
+        return $mother;
+    }
+
+    /**
+     * The category a post in this cluster should be filed under — creating a
+     * sub-category for the cluster on the fly (under the default mother) the
+     * first time, cap-aware. Used at publish so a blank site self-categorizes
+     * without anyone clicking "Build category tree". Returns the category id.
+     */
+    public function categoryForCluster(ContentCluster $cluster): int
+    {
+        if ($cluster->post_category_id && PostCategory::whereKey($cluster->post_category_id)->exists()) {
+            return $cluster->post_category_id;
+        }
+
+        $maxTotal = max(1, min(50, (int) setting('blog.max_categories', 20) ?: 20));
+        $mother = $this->defaultMother();
+
+        // At the cap and this cluster has no category yet → file under the mother.
+        if (PostCategory::count() >= $maxTotal && ! $this->categoryExists($cluster->name)) {
+            $cluster->update(['post_category_id' => $mother->id]);
+
+            return $mother->id;
+        }
+
+        $sub = $this->resolveCategory($cluster->name, $mother->id, 0);
+        $cluster->update(['post_category_id' => $sub->id]);
+        $this->seedDescription($sub, $cluster);
+
+        return $sub->id;
     }
 
     /** Give a fresh category a one-line description so its archive isn't thin. */
