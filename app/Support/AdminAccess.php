@@ -83,6 +83,11 @@ class AdminAccess
         \App\Filament\Pages\InternalLinksReport::class => ['access_internal_links', 'Internal links report', 'SEO'],
         \App\Filament\Pages\ContentStrategySettings::class => ['access_content_strategy', 'Content strategy', 'SEO'],
         \App\Filament\Pages\ImageSeoTools::class => ['access_image_seo', 'Image SEO tools', 'SEO'],
+
+        // Research (keyword & topic discovery — the front of the content pipeline)
+        \App\Filament\Resources\KeywordResearchResource::class => ['access_keyword_research', 'Keyword research', 'Research'],
+        \App\Filament\Pages\ResearchSettings::class => ['access_research_settings', 'Research settings', 'Research'],
+
         \App\Filament\Pages\PageSpeedReport::class => ['access_pagespeed', 'PageSpeed report', 'SEO'],
         \App\Filament\Pages\SearchPerformance::class => ['access_search_performance', 'Search performance', 'SEO'],
 
@@ -140,6 +145,7 @@ class AdminAccess
         'access_posts' => 'manage content',
         'access_post_categories' => 'manage content',
         'access_pages' => 'manage content',
+        'access_keyword_research' => 'manage content',
         'access_email_templates' => 'manage emails',
         'access_email_logs' => 'manage emails',
         'access_redirects' => 'manage seo',
