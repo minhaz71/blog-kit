@@ -15,12 +15,18 @@ class NetworkPublisher
 {
     /**
      * @param  array<int>  $siteIds  connected-site IDs ("all" resolved by the caller)
-     * @return array{queued: int, sites: array<int>, skipped: array<int>, deferred: array<int>}
+     * @return array{queued: int, sites: array<int>, skipped: array<int>, deferred: array<int>, outdated: array<int>}
      */
     public function publish(Post $post, array $siteIds): array
     {
         $active = ConnectedSite::query()->active()->whereIn('id', $siteIds)->get();
         $skipped = array_values(array_diff(array_map('intval', $siteIds), $active->pluck('id')->all()));
+
+        // Sites on an OLDER version than this hub: they still receive the push,
+        // but newer payload fields may not land — report them so the admin can
+        // update them. (Never silently dropped.)
+        $outdated = $active->filter(fn (ConnectedSite $s) => ! \App\Support\NetworkCompat::check($s)['ok'])
+            ->pluck('id')->all();
 
         // A future-dated post: capable spokes (they run the publish-scheduled
         // cron) receive it now AS scheduled and publish themselves at the right
@@ -46,6 +52,7 @@ class NetworkPublisher
             'sites' => $active->pluck('id')->all(),
             'skipped' => $skipped,
             'deferred' => $deferred,
+            'outdated' => $outdated,
         ];
     }
 

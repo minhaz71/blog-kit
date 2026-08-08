@@ -103,12 +103,17 @@ class ConnectedSiteResource extends Resource
                     'offline' => 'warning',
                     default => 'gray',
                 }),
-                TextColumn::make('remote_version')->label('Version')->badge()->color('gray')->placeholder('—'),
+                TextColumn::make('remote_version')->label('Version')->badge()
+                    ->formatStateUsing(fn (?string $state, ConnectedSite $r) => ($state ?: '—').' · '.\App\Support\NetworkCompat::label(\App\Support\NetworkCompat::check($r)['status']))
+                    ->color(fn (ConnectedSite $r) => \App\Support\NetworkCompat::color(\App\Support\NetworkCompat::check($r)['status']))
+                    ->tooltip(fn (ConnectedSite $r) => \App\Support\NetworkCompat::check($r)['message'])
+                    ->placeholder('—'),
                 TextColumn::make('last_seen_at')->label('Last seen')->since()->placeholder('never'),
                 IconColumn::make('is_active')->boolean()->label('Active'),
             ])
             ->recordActions([
                 self::testAction(),
+                self::pullAction(),
                 self::updateAction(),
                 \Filament\Actions\EditAction::make(),
             ])
@@ -128,11 +133,46 @@ class ConnectedSiteResource extends Resource
             ->action(function (ConnectedSite $record): void {
                 [$ok, $message] = (new NetworkClient)->refreshHealth($record);
 
+                // Append the version-compatibility verdict so a mismatch is
+                // obvious the moment you test the connection.
+                $compat = \App\Support\NetworkCompat::check($record->refresh());
+                if ($ok && ! $compat['ok']) {
+                    Notification::make()->title('Connected, but version mismatch')
+                        ->body($compat['message'].' Use "Update" to bring it in sync before pushing or pulling.')
+                        ->warning()->persistent()->send();
+
+                    return;
+                }
+
                 Notification::make()
                     ->title($ok ? 'Connection OK' : 'Connection failed')
-                    ->body($message)
+                    ->body($ok ? $message.' '.$compat['message'] : $message)
                     ->{$ok ? 'success' : 'danger'}()
                     ->send();
+            });
+    }
+
+    /** Pull this spoke's posts into the hub mirror (extract), with a version guard. */
+    public static function pullAction(): Action
+    {
+        return Action::make('pull')
+            ->label('Pull posts')
+            ->icon(Heroicon::OutlinedArrowDownOnSquare)
+            ->color('gray')
+            ->action(function (ConnectedSite $record): void {
+                $compat = \App\Support\NetworkCompat::check($record);
+
+                if (! $compat['ok'] && $compat['status'] !== \App\Support\NetworkCompat::UNKNOWN) {
+                    Notification::make()->title('Version mismatch — update recommended')
+                        ->body($compat['message'].' Pulling anyway; some fields may be missing until versions match.')
+                        ->warning()->persistent()->send();
+                }
+
+                \App\Jobs\PullSitePosts::dispatch($record->id);
+
+                Notification::make()->title('Pulling posts')
+                    ->body("Fetching {$record->name}'s posts into “All sites' posts”. Refresh in a moment.")
+                    ->success()->send();
             });
     }
 

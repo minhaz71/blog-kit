@@ -209,6 +209,15 @@ class WriteAiBlogPost implements ShouldQueue
             .($deferred > 0 ? " — {$deferred} will receive it at its scheduled publish time (spoke has no scheduler)" : '')
             .($result['skipped'] !== [] ? ' ('.count($result['skipped']).' inactive skipped)' : '').'.',
             'success');
+
+        // Version safety: warn when any target spoke is behind this hub — newer
+        // fields (schema, taxonomy, new columns) may not transfer until it's updated.
+        if (($result['outdated'] ?? []) !== []) {
+            $names = \App\Models\ConnectedSite::whereIn('id', $result['outdated'])->pluck('name')->implode(', ');
+            AiActivityLog::write($batch->id, $item->id, 'publish',
+                "⚠️ Version mismatch: {$names} is on an older BlogKit version than this hub. Update it (Network → Connected sites → Update) so all content transfers.",
+                'warning');
+        }
     }
 
     protected function markFailed(AiImportItem $item, string $message): void
