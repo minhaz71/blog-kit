@@ -16,6 +16,28 @@ class MonitorAiImportBatch extends Page
 
     public AiImportBatch $record;
 
+    /** Batch kinds produced by the blog pipeline (not the ecommerce catalog). */
+    protected const BLOG_KINDS = ['blog', 'blog_ideas', 'comparison_ideas'];
+
+    /**
+     * The monitor is shared by the ecommerce AI product batches AND the AI blog
+     * pipeline. Its resource is ecommerce-gated (403 when the store is off), so
+     * gate by the BATCH KIND instead: a blog/research batch is monitorable on a
+     * blog-only site (via access_ai_blog_batches); a product batch keeps the
+     * resource's ecommerce gate.
+     */
+    public static function canAccess(array $parameters = []): bool
+    {
+        $record = $parameters['record'] ?? null;
+        $batch = $record instanceof AiImportBatch ? $record : ($record ? AiImportBatch::find($record) : null);
+
+        if ($batch && in_array($batch->kind, self::BLOG_KINDS, true)) {
+            return (bool) auth()->user()?->can('access_ai_blog_batches');
+        }
+
+        return AiImportBatchResource::canAccess();
+    }
+
     public function mount(AiImportBatch $record): void
     {
         $this->record = $record;
@@ -43,10 +65,14 @@ class MonitorAiImportBatch extends Page
             AiActivityLog::write($this->record->id, null, 'control', '▶ Batch resumed — finishing the remaining products in the background.', 'success');
 
             // Background runner finishes everything left; fall back to the
-            // queue if the environment can't spawn a process.
+            // queue if the environment can't spawn a process — dispatching the
+            // RIGHT writer for the batch kind (blog vs product).
             if (! \App\Support\BackgroundProcess::artisan(['ai:run-batch', (string) $this->record->id])) {
+                $isBlog = in_array($this->record->kind, self::BLOG_KINDS, true);
                 foreach ($this->record->items()->whereIn('status', ['pending', 'failed'])->pluck('id') as $itemId) {
-                    \App\Jobs\WriteAiProduct::dispatch($itemId);
+                    $isBlog
+                        ? \App\Jobs\WriteAiBlogPost::dispatch($itemId)
+                        : \App\Jobs\WriteAiProduct::dispatch($itemId);
                 }
             }
         }
