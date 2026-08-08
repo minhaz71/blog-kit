@@ -55,11 +55,21 @@ class BlogPublisher
 
             $post = $item->post_id ? Post::withTrashed()->find($item->post_id) : null;
 
-            // Held (failed review) OR not published to this site → keep it an
-            // unpublished local draft; otherwise resolve the normal slot.
-            [$status, $publishedAt] = ($held || ! $localVisible)
-                ? ['draft', null]
-                : $this->publishSlot($item, $batch);
+            // The intended publish slot (respects publish_mode + schedule).
+            $slot = $held ? ['draft', null] : $this->publishSlot($item, $batch);
+
+            if ($localVisible) {
+                // Visible here → local status IS the slot; nothing extra to push.
+                [$status, $publishedAt] = $slot;
+                $pushStatus = null;
+                $pushPublishedAt = null;
+            } else {
+                // Written for connected sites only: hidden DRAFT on the hub, but
+                // the pushed copy carries the real slot so it goes live (and on
+                // schedule) on the spoke. Held items stay draft everywhere.
+                [$status, $publishedAt] = ['draft', null];
+                [$pushStatus, $pushPublishedAt] = $held ? [null, null] : $slot;
+            }
 
             $attributes = [
                 'title' => $title,
@@ -71,6 +81,8 @@ class BlogPublisher
                 'reading_time' => max(1, (int) ceil($words / 200)),
                 'status' => $status,
                 'published_at' => $publishedAt,
+                'push_status' => $pushStatus,
+                'push_published_at' => $pushPublishedAt,
                 'featured_image_alt' => trim((string) ($output['image_alt'] ?? '')) ?: null,
                 // Deterministic (from ComparisonPlanner's pairing), never
                 // AI-derived — carries the compared products to the schema

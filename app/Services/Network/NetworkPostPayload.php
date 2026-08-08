@@ -41,8 +41,10 @@ class NetworkPostPayload
             'slug' => (string) $post->slug,
             'excerpt' => (string) $post->excerpt,
             'content' => (string) $post->content,
-            'status' => (string) $post->status,           // draft|published|scheduled
-            'published_at' => $post->published_at?->toIso8601String(),
+            // Effective NETWORK status/date: a hub-only hidden draft still ships
+            // its real publish intent (published/scheduled) so it goes live on the spoke.
+            'status' => (string) $post->networkStatus(),   // draft|published|scheduled
+            'published_at' => $post->networkPublishedAt()?->toIso8601String(),
             'featured_image_alt' => $post->featured_image_alt,
             // Whether the hub post HAS a featured image (independent of whether
             // we could inline it) — lets the spoke tell "removed" from "too
@@ -255,8 +257,8 @@ class NetworkPostPayload
             'title' => (string) $post->title,
             'excerpt' => (string) $post->excerpt,
             'content' => (string) $post->content,
-            'status' => (string) $post->status,
-            'published_at' => $post->published_at?->clone()->utc()->toIso8601String(),
+            'status' => (string) $post->networkStatus(),
+            'published_at' => $post->networkPublishedAt()?->clone()->utc()->toIso8601String(),
             'featured_image_alt' => $post->featured_image_alt,
             'featured_image' => self::imageSha($post->featured_image),
             'seo' => [

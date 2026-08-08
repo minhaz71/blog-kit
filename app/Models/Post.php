@@ -20,6 +20,7 @@ class Post extends Model
     {
         return [
             'published_at' => 'datetime',
+            'push_published_at' => 'datetime',
             'show_toc' => 'boolean',
             'compared_product_ids' => 'array',
         ];
@@ -50,6 +51,22 @@ class Post extends Model
             ->get()
             ->sortBy(fn (Product $product) => array_search($product->id, $ids, true))
             ->values();
+    }
+
+    /**
+     * The status to publish this post AS on connected sites. Normally the same
+     * as the local status, but a hub-only hidden draft (written for spokes)
+     * carries its real publish intent in push_status so it goes live there.
+     */
+    public function networkStatus(): string
+    {
+        return $this->push_status ?: $this->status;
+    }
+
+    /** The publish date to send to connected sites (push override, else local). */
+    public function networkPublishedAt(): ?\Illuminate\Support\Carbon
+    {
+        return $this->push_published_at ?: $this->published_at;
     }
 
     /** The canonical topic cluster this post belongs to (pillar + spokes). */

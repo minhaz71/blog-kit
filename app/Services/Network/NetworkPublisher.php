@@ -33,12 +33,12 @@ class NetworkPublisher
         // time — resilient even if the hub is offline then. Spokes that don't
         // advertise the capability can't be trusted to flip it, so we DEFER the
         // push until publish time and send it already-published.
-        $scheduled = $post->status === 'scheduled' && $post->published_at?->isFuture();
+        $scheduled = $post->networkStatus() === 'scheduled' && $post->networkPublishedAt()?->isFuture();
         $deferred = [];
 
         foreach ($active as $site) {
             if ($scheduled && ! self::spokeHonorsSchedule($site)) {
-                PushPostToSite::dispatch($post->id, $site->id)->delay($post->published_at);
+                PushPostToSite::dispatch($post->id, $site->id)->delay($post->networkPublishedAt());
                 $deferred[] = $site->id;
 
                 continue;
