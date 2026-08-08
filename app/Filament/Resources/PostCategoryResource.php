@@ -41,6 +41,23 @@ class PostCategoryResource extends Resource
                     ->live(onBlur: true)
                     ->afterStateUpdated(fn (string $operation, ?string $state, Set $set) => $operation === 'create' ? $set('slug', Str::slug($state ?? '')) : null),
                 TextInput::make('slug')->required()->unique(ignoreRecord: true),
+                \Filament\Forms\Components\Select::make('parent_id')
+                    ->label('Mother category')
+                    ->relationship(
+                        'parent',
+                        'name',
+                        fn ($query, ?\App\Models\PostCategory $record) => $query
+                            ->whereNull('parent_id')
+                            ->when($record, fn ($q) => $q->whereKeyNot($record->id)),
+                    )
+                    ->searchable()
+                    ->native(false)
+                    ->placeholder('— none (this is a mother category) —')
+                    ->helperText('Leave blank for a top-level (mother) category; pick one to make this a sub-category.'),
+                TextInput::make('sort_order')->numeric()->default(0)->helperText('Lower shows first in the menu.'),
+                \Filament\Forms\Components\Toggle::make('is_active')->default(true)->inline(false),
+                \Filament\Forms\Components\Toggle::make('show_in_menu')->default(true)->inline(false)
+                    ->helperText('Include this category in the auto-generated header menu.'),
             ]),
             Textarea::make('description')->rows(3)->columnSpanFull(),
         ]);
@@ -57,8 +74,10 @@ class PostCategoryResource extends Resource
                     ->copyable()
                     ->sortable(),
                 TextColumn::make('name')->searchable()->sortable(),
+                TextColumn::make('parent.name')->label('Mother')->placeholder('— top level —')->badge()->color('gray')->toggleable(),
                 TextColumn::make('slug')->toggleable(),
                 TextColumn::make('posts_count')->counts('posts')->label('Posts'),
+                \Filament\Tables\Columns\IconColumn::make('show_in_menu')->boolean()->label('Menu')->toggleable(),
                 \Filament\Tables\Columns\IconColumn::make('is_default')
                     ->label('Default')
                     ->boolean()

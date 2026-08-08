@@ -37,6 +37,16 @@
         @endif
     @endif
 
+    {{-- Sub-category chips (shown on a category archive that has sub-categories) --}}
+    @if(!empty($subcategories) && $subcategories->isNotEmpty())
+        <div class="mt-4 flex flex-wrap gap-2">
+            @foreach($subcategories as $sub)
+                @php($subActive = ($activeCategory ?? null)?->id === $sub->id)
+                <a href="{{ route('blog.category', $sub->slug) }}" class="rounded-full px-3 py-1 text-xs font-medium transition {{ $subActive ? 'bg-brand text-brand-fg' : 'border border-gray-200 text-gray-600 hover:border-brand hover:text-brand' }}">{{ $sub->name }}</a>
+            @endforeach
+        </div>
+    @endif
+
     {{-- Empty state --}}
     @if($posts->isEmpty())
         <div class="py-24 text-center">

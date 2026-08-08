@@ -36,6 +36,62 @@ class PostCategory extends Model
         return $this->hasMany(Post::class);
     }
 
+    // ── Hierarchy (mother → sub), mirroring the product Category tree ──
+
+    public function parent()
+    {
+        return $this->belongsTo(PostCategory::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(PostCategory::class, 'parent_id')->orderBy('sort_order')->orderBy('name');
+    }
+
+    public function scopeActive($q)
+    {
+        return $q->where('is_active', true);
+    }
+
+    /** Mother categories only (no parent). */
+    public function scopeRoot($q)
+    {
+        return $q->whereNull('parent_id');
+    }
+
+    /** IDs of this category and all descendants (for archive post queries). */
+    public function descendantIdsWithSelf(): array
+    {
+        $ids = [$this->id];
+        $frontier = [$this->id];
+
+        while ($frontier) {
+            $frontier = PostCategory::whereIn('parent_id', $frontier)->pluck('id')->all();
+            $ids = array_merge($ids, $frontier);
+        }
+
+        return $ids;
+    }
+
+    /** Breadcrumb trail from the mother down to this category. */
+    public function breadcrumbTrail(): array
+    {
+        $trail = [$this];
+        $node = $this;
+
+        while ($node->parent_id && ($node = $node->parent)) {
+            array_unshift($trail, $node);
+        }
+
+        return $trail;
+    }
+
+    /** Public archive URL for this category. */
+    public function url(): string
+    {
+        return route('blog.category', $this->slug);
+    }
+
     /**
      * The blog's fallback category: the admin-chosen default
      * (blog.default_post_category_id) when it still exists, otherwise a

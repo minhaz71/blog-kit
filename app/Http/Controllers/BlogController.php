@@ -13,7 +13,7 @@ class BlogController extends Controller
     {
         return view('blog.index', [
             'posts' => Post::published()->with(['author', 'category'])->latest('published_at')->paginate(12),
-            'categories' => PostCategory::has('posts')->get(),
+            'categories' => $this->navCategories(),
             'heading' => 'Blog',
             'seo' => $seo->forUtility('Blog', noindex: false),
         ]);
@@ -21,12 +21,39 @@ class BlogController extends Controller
 
     public function category(PostCategory $postCategory, SeoManager $seo)
     {
+        // A mother category aggregates posts from all its sub-categories; a sub
+        // shows just its own. descendantIdsWithSelf() handles both.
+        $ids = $postCategory->descendantIdsWithSelf();
+
+        // Sub-category chips: the children of this category's mother (so
+        // siblings stay visible when browsing a sub), only those with posts.
+        $mother = $postCategory->parent_id ? ($postCategory->parent ?? $postCategory) : $postCategory;
+        $subcategories = $mother->children()->active()->where('show_in_menu', true)
+            ->orderBy('sort_order')->orderBy('name')->get()
+            ->filter(fn (PostCategory $c) => Post::published()->whereIn('post_category_id', $c->descendantIdsWithSelf())->exists())
+            ->values();
+
         return view('blog.index', [
-            'posts' => $postCategory->posts()->published()->with(['author', 'category'])->latest('published_at')->paginate(12),
-            'categories' => PostCategory::has('posts')->get(),
+            'posts' => Post::published()->whereIn('post_category_id', $ids)->with(['author', 'category'])->latest('published_at')->paginate(12),
+            'categories' => $this->navCategories(),
+            'subcategories' => $subcategories,
+            'activeCategory' => $postCategory,
             'heading' => $postCategory->name,
             'seo' => $seo->forUtility($postCategory->name.' — Blog', noindex: false),
         ]);
+    }
+
+    /**
+     * Top-level (mother) categories that have at least one published post
+     * anywhere in their subtree — the primary blog filter. A flat, pre-
+     * hierarchy install has every category at root level, so this is
+     * backward-compatible.
+     */
+    protected function navCategories()
+    {
+        return PostCategory::root()->active()->orderBy('sort_order')->orderBy('name')->get()
+            ->filter(fn (PostCategory $c) => Post::published()->whereIn('post_category_id', $c->descendantIdsWithSelf())->exists())
+            ->values();
     }
 
     public function author(User $author, SeoManager $seo)
@@ -37,7 +64,7 @@ class BlogController extends Controller
 
         return view('blog.index', [
             'posts' => $posts,
-            'categories' => PostCategory::has('posts')->get(),
+            'categories' => $this->navCategories(),
             'heading' => 'Posts by '.$author->publicName(),
             'author' => $author,
             'seo' => $seo->forAuthor($author),
