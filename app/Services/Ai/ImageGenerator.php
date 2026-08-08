@@ -85,7 +85,9 @@ class ImageGenerator
     {
         $provider = $opts['provider'] ?? self::provider();
         $model = $opts['model'] ?? self::model($provider);
-        $size = $opts['size'] ?? (string) setting('ai.image_size', '1536x1024');
+        // Default to a true 16:9 hero (matches the blog card/hero slot, so the
+        // image isn't cropped top/bottom by object-cover). 1536x864 = 16:9.
+        $size = $opts['size'] ?? (string) setting('ai.image_size', '1536x864');
         $key = trim((string) setting(self::keyName($provider), ''));
 
         if ($key === '') {
@@ -118,7 +120,13 @@ class ImageGenerator
             return [(int) $m[1], (int) $m[2]];
         }
 
-        return [1536, 1024];
+        return [1536, 864]; // 16:9 landscape default
+    }
+
+    /** Round a dimension to the nearest multiple of 16 (FLUX/SDXL like this). */
+    protected function snap16(int $n): int
+    {
+        return max(256, (int) (round($n / 16) * 16));
     }
 
     /** Detect the real image type from magic bytes (fal may return JPEG/WebP). */
@@ -142,6 +150,8 @@ class ImageGenerator
     protected function fal(string $key, string $model, string $prompt, string $size): string
     {
         [$w, $h] = $this->dimensions($size);
+        $w = $this->snap16($w);
+        $h = $this->snap16($h);
 
         $response = Http::withHeaders(['Authorization' => 'Key '.$key])
             ->timeout(180)
