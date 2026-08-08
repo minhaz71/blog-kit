@@ -187,6 +187,65 @@ class InternalLinksReport extends Page
         ];
     }
 
+    /**
+     * Cluster health: for every content cluster, which spokes fail to link UP
+     * to their pillar, and which spokes the pillar fails to link DOWN to. These
+     * are the hub-and-spoke gaps that weaken topical authority — the linker's
+     * cluster scoring now suggests them, this surfaces the ones still missing.
+     *
+     * @return array<int, object>
+     */
+    protected function clusterGaps(): array
+    {
+        $posts = Post::query()->published()
+            ->whereNotNull('content_cluster_id')
+            ->get(['id', 'title', 'slug', 'content_cluster_id', 'content_role', 'pillar_post_id']);
+
+        if ($posts->isEmpty()) {
+            return [];
+        }
+
+        // Post → Post editorial links as a fast "src#tgt" lookup set.
+        $links = [];
+        InternalLink::query()
+            ->where('source_type', Post::class)
+            ->where('target_type', Post::class)
+            ->get(['source_id', 'target_id'])
+            ->each(function ($l) use (&$links): void {
+                $links[$l->source_id.'#'.$l->target_id] = true;
+            });
+
+        $byCluster = $posts->groupBy('content_cluster_id');
+        $names = \App\Models\ContentCluster::query()->whereIn('id', $byCluster->keys())->pluck('name', 'id');
+
+        $out = [];
+        foreach ($byCluster as $cid => $group) {
+            $pillar = $group->firstWhere('content_role', 'pillar');
+            $spokes = $group->where('content_role', 'spoke')->values();
+
+            $missingUp = $pillar
+                ? $spokes->reject(fn ($s) => isset($links[$s->id.'#'.$pillar->id]))->values()
+                : collect();
+            $missingDown = $pillar
+                ? $spokes->reject(fn ($s) => isset($links[$pillar->id.'#'.$s->id]))->values()
+                : collect();
+
+            $out[] = (object) [
+                'name' => $names[$cid] ?? ('Cluster #'.$cid),
+                'pillar' => $pillar,
+                'spokeCount' => $spokes->count(),
+                'hasPillar' => (bool) $pillar,
+                'missingUp' => $missingUp,
+                'missingDown' => $missingDown,
+                'gapScore' => ($pillar ? 0 : 100) + $missingUp->count() + $missingDown->count(),
+            ];
+        }
+
+        usort($out, fn ($a, $b) => $b->gapScore <=> $a->gapScore);
+
+        return $out;
+    }
+
     protected function getViewData(): array
     {
         // Two aggregate queries build every count on this page — no N+1.
@@ -279,6 +338,7 @@ class InternalLinksReport extends Page
             'orphanCategories' => $categories->where('inbound', 0)->values(),
             'distribution' => $distribution,
             'detailData' => $this->detailData(),
+            'clusterGaps' => $this->clusterGaps(),
         ];
     }
 }

@@ -139,6 +139,41 @@
             </div>
         </div>
 
+        {{-- ── Cluster health: hub-and-spoke link gaps ─────────────── --}}
+        @if(!empty($clusterGaps))
+            <x-filament::section collapsible collapsed
+                icon="heroicon-o-share"
+                heading="Cluster link health"
+                description="Spokes that don't link up to their pillar, and pillars that don't link down to every spoke. The linker now scores these highly — publish or re-scan to close them.">
+                <div style="display:flex; flex-direction:column; gap:.6rem">
+                    @foreach($clusterGaps as $c)
+                        <div style="border:1px solid rgba(0,0,0,.08); border-radius:.6rem; padding:.75rem .9rem">
+                            <div style="display:flex; align-items:center; gap:.6rem; flex-wrap:wrap">
+                                <strong>{{ $c->name }}</strong>
+                                <span class="ilr-meta">{{ $c->spokeCount }} spoke(s)</span>
+                                @if(!$c->hasPillar)
+                                    <span style="color:#dc2626; font-weight:600">⚠ no pillar published</span>
+                                @elseif($c->missingUp->isEmpty() && $c->missingDown->isEmpty())
+                                    <span style="color:#16a34a; font-weight:600">✓ fully linked</span>
+                                @endif
+                            </div>
+                            @if($c->hasPillar && $c->pillar)
+                                <p class="ilr-meta" style="margin-top:.25rem">Pillar: <a href="{{ $c->pillar->url() }}" target="_blank" style="text-decoration:underline">{{ $c->pillar->title }}</a></p>
+                            @endif
+                            @if($c->missingUp->isNotEmpty())
+                                <p style="margin-top:.4rem; font-size:.82rem"><span style="color:#d97706; font-weight:600">Spokes not linking up to pillar:</span>
+                                    {{ $c->missingUp->pluck('title')->take(8)->implode('; ') }}{{ $c->missingUp->count() > 8 ? ' …+'.($c->missingUp->count()-8) : '' }}</p>
+                            @endif
+                            @if($c->missingDown->isNotEmpty())
+                                <p style="margin-top:.25rem; font-size:.82rem"><span style="color:#d97706; font-weight:600">Pillar not linking down to:</span>
+                                    {{ $c->missingDown->pluck('title')->take(8)->implode('; ') }}{{ $c->missingDown->count() > 8 ? ' …+'.($c->missingDown->count()-8) : '' }}</p>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </x-filament::section>
+        @endif
+
         {{-- ── Toolbar: search + sync ─────────────────────────────── --}}
         <div class="ilr-toolbar">
             <div class="ilr-search">

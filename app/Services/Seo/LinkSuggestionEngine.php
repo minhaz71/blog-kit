@@ -58,6 +58,8 @@ class LinkSuggestionEngine
 
     protected array $customCaps = [];   // "CustomLinkTarget#id" => site-wide max links
 
+    protected array $cluster = [];      // "Post#id" => ['cid'=>?int,'role'=>?string,'stage'=>?string,'pillar'=>?int]
+
     protected bool $loaded = false;
 
     /** @return array{sources: int, suggestions: int} */
@@ -395,6 +397,12 @@ class LinkSuggestionEngine
             $points += 5;
         }
 
+        // Cluster + funnel structural bonuses (article → article within the
+        // content map): the topical-authority signal search engines reward.
+        if ($source instanceof Post && $match['target_type'] === Post::class) {
+            $points += $this->clusterBonus($sourceKey, $targetKey);
+        }
+
         // Conservative caps for the risky kinds.
         if ($match['ambiguous']) {
             $points = min($points, 55);
@@ -431,6 +439,44 @@ class LinkSuggestionEngine
         usort($targets, fn ($a, $b) => ($this->titleLength[$a['type'].'#'.$a['id']] ?? 99) <=> ($this->titleLength[$b['type'].'#'.$b['id']] ?? 99));
 
         return $targets[0] ?? null;
+    }
+
+    /**
+     * Cluster + funnel structural score for an article → article link.
+     *  - spoke → its pillar: the strongest hub-and-spoke signal (+25);
+     *  - pillar → one of its spokes: the hub linking down (+18);
+     *  - siblings in the same cluster interlink (+12);
+     *  - funnel flow: forward (top→middle→bottom) rewarded, backward penalized.
+     * Returns 0 when either post carries no cluster metadata.
+     */
+    protected function clusterBonus(string $sourceKey, string $targetKey): int
+    {
+        $s = $this->cluster[$sourceKey] ?? null;
+        $t = $this->cluster[$targetKey] ?? null;
+
+        if ($s === null || $t === null) {
+            return 0;
+        }
+
+        $bonus = 0;
+
+        if (($s['role'] ?? null) === 'spoke' && ($s['pillar'] ?? null) !== null && ($s['pillar'] ?? null) === ($t['id'] ?? null)) {
+            $bonus += 25; // spoke links UP to its pillar
+        } elseif (($t['role'] ?? null) === 'spoke' && ($t['pillar'] ?? null) !== null && ($t['pillar'] ?? null) === ($s['id'] ?? null)) {
+            $bonus += 18; // pillar links DOWN to a spoke
+        } elseif (($s['cid'] ?? null) !== null && ($s['cid'] ?? null) === ($t['cid'] ?? null)) {
+            $bonus += 12; // siblings in the same cluster
+        }
+
+        // Funnel flow: nudge readers forward, discourage sending them back up.
+        $order = ['top' => 1, 'middle' => 2, 'bottom' => 3];
+        $si = $order[$s['stage'] ?? ''] ?? 0;
+        $ti = $order[$t['stage'] ?? ''] ?? 0;
+        if ($si !== 0 && $ti !== 0) {
+            $bonus += $ti > $si ? 6 : ($ti < $si ? -8 : 0);
+        }
+
+        return $bonus;
     }
 
     /** Distinct significant terms shared by the paragraph and the target. */
@@ -599,7 +645,7 @@ class LinkSuggestionEngine
             }
         }
 
-        foreach (Post::query()->published()->with(['seoMeta', 'category:id,name'])->get(['id', 'title', 'slug', 'post_category_id']) as $post) {
+        foreach (Post::query()->published()->with(['seoMeta', 'category:id,name'])->get(['id', 'title', 'slug', 'post_category_id', 'content_cluster_id', 'content_role', 'funnel_stage', 'pillar_post_id']) as $post) {
             $key = Post::class.'#'.$post->id;
             $tokens = LinkDictionary::tokenize(implode(' ', array_filter([
                 $post->title,
@@ -608,6 +654,15 @@ class LinkSuggestionEngine
             ])));
             $this->context[$key] = array_fill_keys(array_diff($tokens, LinkDictionary::FILLERS), true);
             $this->titleLength[$key] = count(LinkDictionary::tokenize($post->title));
+
+            // Cluster/funnel map — powers pillar↔spoke and funnel-flow scoring.
+            $this->cluster[$key] = [
+                'cid' => $post->content_cluster_id,
+                'role' => $post->content_role,
+                'stage' => $post->funnel_stage,
+                'pillar' => $post->pillar_post_id,
+                'id' => $post->id,
+            ];
 
             if ($post->seoMeta?->noindex) {
                 $this->noindex[$key] = true;
