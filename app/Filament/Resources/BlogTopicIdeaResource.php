@@ -239,6 +239,9 @@ class BlogTopicIdeaResource extends Resource
                     'cluster' => $idea->cluster,
                     'role' => $idea->role,
                     'primary_keyword' => (string) $idea->primary_keyword,
+                    // Multisite: an idea researched for a spoke carries its target
+                    // so WriteAiBlogPost fans the finished article out to that site.
+                    'site_ids' => $idea->site_id ? (string) $idea->site_id : 'local',
                     'pain_point' => (string) $idea->pain_point,
                     'search_query' => (string) $idea->search_query,
                     'audience_need' => (string) $idea->audience_need,

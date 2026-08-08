@@ -31,4 +31,15 @@ class KeywordResearchRun extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /** The connected spoke this run targets (null = this/local site). */
+    public function site()
+    {
+        return $this->belongsTo(ConnectedSite::class, 'site_id');
+    }
+
+    public function targetLabel(): string
+    {
+        return $this->site_id ? ($this->site?->name ?? "site #{$this->site_id}") : 'This site';
+    }
 }

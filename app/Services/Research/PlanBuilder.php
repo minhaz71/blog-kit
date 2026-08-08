@@ -44,7 +44,15 @@ class PlanBuilder
         // Secondary keywords for a term = its top sibling spokes in the same cluster.
         $byCluster = $terms->groupBy('cluster');
 
-        $existing = BlogTopicIdea::conflictCorpus(includePosts: true);
+        // Cannibalization guard corpus: for a spoke target, check against THAT
+        // site's mirrored posts + its own ideas (not this hub's content); for a
+        // local run, the usual local corpus.
+        $existing = $run->site_id
+            ? array_merge(
+                \App\Models\NetworkRemotePost::where('site_id', $run->site_id)->pluck('title')->filter()->values()->all(),
+                BlogTopicIdea::where('site_id', $run->site_id)->pluck('title')->filter()->values()->all(),
+            )
+            : BlogTopicIdea::conflictCorpus(includePosts: true);
         $created = 0;
         $skipped = 0;
 
@@ -70,6 +78,7 @@ class PlanBuilder
 
             BlogTopicIdea::create([
                 'batch_id' => null,
+                'site_id' => $run->site_id, // multisite target carried into the idea
                 'title' => $title,
                 'fingerprint' => $fingerprint,
                 'cluster' => $term->cluster,

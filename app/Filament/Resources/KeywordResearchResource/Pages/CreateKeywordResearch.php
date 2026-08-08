@@ -15,6 +15,8 @@ class CreateKeywordResearch extends CreateRecord
     {
         $data['user_id'] = auth()->id();
         $data['status'] = 'queued';
+        // "This site" (empty) → null; a chosen spoke keeps its id.
+        $data['site_id'] = ($data['site_id'] ?? '') !== '' ? (int) $data['site_id'] : null;
 
         return $data;
     }

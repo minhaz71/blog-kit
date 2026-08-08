@@ -67,6 +67,16 @@ class KeywordResearchResource extends Resource
                             'google' => 'Free Google Autocomplete',
                             'llm' => 'LLM only',
                         ])->default('auto')->native(false),
+                    // Multisite: research + plan FOR a connected spoke from the
+                    // hub. Only shown when this install is a network hub.
+                    Select::make('site_id')
+                        ->label('Target site')
+                        ->options(fn () => ['' => 'This site'] + \App\Models\ConnectedSite::query()
+                            ->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+                        ->default('')
+                        ->native(false)
+                        ->visible(fn () => network_enabled() && is_network_hub())
+                        ->helperText('Research, plan and generate for a connected site; content is pushed there over the key connection.'),
                     TextInput::make('target_country')->label('Target country (optional)')->placeholder('United Arab Emirates'),
                     TextInput::make('target_language')->label('Language code')->default('en'),
                     TextInput::make('location_code')->label('DataForSEO location code (optional)')->numeric()
@@ -85,6 +95,8 @@ class KeywordResearchResource extends Resource
                     'clustered' => 'success', 'planned' => 'success', 'researching' => 'warning',
                     'failed' => 'danger', default => 'gray',
                 }),
+                TextColumn::make('site.name')->label('Target')->badge()->color('gray')
+                    ->placeholder('This site')->visible(fn () => network_enabled() && is_network_hub()),
                 TextColumn::make('terms_count')->label('Terms')->alignCenter(),
                 TextColumn::make('clusters_count')->label('Clusters')->alignCenter(),
                 TextColumn::make('provider')->badge()->color('gray')->toggleable(),
