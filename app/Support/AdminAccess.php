@@ -80,6 +80,7 @@ class AdminAccess
         \App\Filament\Resources\CustomSchemaResource::class => ['access_custom_schema', 'Custom schema', 'SEO'],
         \App\Filament\Pages\LinkAgent::class => ['access_link_agent', 'Link agent', 'SEO'],
         \App\Filament\Pages\InternalLinksReport::class => ['access_internal_links', 'Internal links report', 'SEO'],
+        \App\Filament\Pages\ContentStrategySettings::class => ['access_content_strategy', 'Content strategy', 'SEO'],
         \App\Filament\Pages\ImageSeoTools::class => ['access_image_seo', 'Image SEO tools', 'SEO'],
         \App\Filament\Pages\PageSpeedReport::class => ['access_pagespeed', 'PageSpeed report', 'SEO'],
         \App\Filament\Pages\SearchPerformance::class => ['access_search_performance', 'Search performance', 'SEO'],

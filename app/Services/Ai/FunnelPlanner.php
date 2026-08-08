@@ -75,6 +75,44 @@ class FunnelPlanner
         return self::BOTTOM_TARGETS[self::bottomTarget()];
     }
 
+    /** Canonical-guard similarity threshold (Content Strategy setting; clamped). */
+    public static function similarityLimit(): float
+    {
+        $v = (float) setting('funnel.similarity_threshold', self::SIMILARITY_LIMIT);
+
+        return max(0.3, min(0.9, $v ?: self::SIMILARITY_LIMIT));
+    }
+
+    /** Target articles per cluster — drives how many clusters a run designs. */
+    public static function articlesPerCluster(): int
+    {
+        return max(4, min(40, (int) setting('funnel.articles_per_cluster', 12) ?: 12));
+    }
+
+    /**
+     * Desired top/middle/bottom mix as integer percentages (Content Strategy
+     * setting). Normalized so the three always sum to ~100 for the prompt.
+     *
+     * @return array{top:int, middle:int, bottom:int}
+     */
+    public static function stageMix(): array
+    {
+        $top = (int) setting('funnel.mix_top', 45);
+        $middle = (int) setting('funnel.mix_middle', 35);
+        $bottom = (int) setting('funnel.mix_bottom', 20);
+        $sum = $top + $middle + $bottom;
+
+        if ($sum <= 0) {
+            return ['top' => 45, 'middle' => 35, 'bottom' => 20];
+        }
+
+        return [
+            'top' => (int) round($top / $sum * 100),
+            'middle' => (int) round($middle / $sum * 100),
+            'bottom' => (int) round($bottom / $sum * 100),
+        ];
+    }
+
     public function run(AiImportBatch $batch): int
     {
         $target = max(10, min(200, (int) $batch->topic_count ?: 100));
@@ -241,7 +279,7 @@ SYS;
 
     protected function designClusters(LlmClient $llm, AiImportBatch $batch, array $insights, int $target): array
     {
-        $clusterCount = max(3, min(12, (int) ceil($target / 12)));
+        $clusterCount = max(3, min(12, (int) ceil($target / self::articlesPerCluster())));
         $commerce = ecommerce_enabled();
         $scope = $commerce ? 'ecommerce' : 'blog_only';
 
@@ -347,11 +385,12 @@ SYS;
         // Three-stage funnel guidance (the nowdoc system prompt lists only
         // top|middle for back-compat; this authoritative block adds the
         // decision stage and tells the model where bottom-funnel intent leads).
+        $mix = self::stageMix();
         $stageGuide = "FUNNEL STAGES (funnel_stage may be top, middle OR bottom):\n"
             ."- top = awareness/informational: explain, teach, answer. ZERO selling.\n"
             ."- middle = consideration: compare, evaluate, help the reader choose.\n"
             .'- bottom = decision/transactional: buying guides, "best X" roundups, "is X worth it", "X vs Y — which to buy". These route the reader to '.self::bottomTargetDescription().".\n"
-            .'Aim for a healthy spread: roughly 45% top, 35% middle, 20% bottom.';
+            .'Aim for a healthy spread: roughly '.$mix['top'].'% top, '.$mix['middle'].'% middle, '.$mix['bottom'].'% bottom.';
 
         $user = 'RESEARCH DOSSIER:\n'.json_encode($insights, JSON_UNESCAPED_UNICODE)
             ."\n\nCLUSTERS:\n".json_encode($clusters, JSON_UNESCAPED_UNICODE)
@@ -446,7 +485,7 @@ SYS;
             // parked idea, or a PRODUCT/CATEGORY page — similar titles
             // cannibalize articles and compete with money pages; the
             // existing page stays canonical and this title is never suggested.
-            if ($conflict = BlogTopicIdea::rankingConflict($title, array_merge($existing, $conflictCorpus), self::SIMILARITY_LIMIT)) {
+            if ($conflict = BlogTopicIdea::rankingConflict($title, array_merge($existing, $conflictCorpus), self::similarityLimit())) {
                 $reject('too similar to "'.mb_substr($conflict, 0, 60).'" (would compete with it in search)');
 
                 continue;

@@ -25,11 +25,36 @@ use Illuminate\Support\Collection;
  */
 class ComparisonPlanner
 {
-    /** Facets that meaningfully differentiate two products for a comparison article. */
+    /** Default facets that differentiate two products (overridable per store). */
     public const DIFFERENTIATOR_SLUGS = ['flavor-family', 'cooling-level', 'tobacco-strength'];
 
     /** Max comparison pairs proposed per category (avoids combinatorial blow-up). */
     public const MAX_PAIRS_PER_CATEGORY = 4;
+
+    /**
+     * The attribute slugs used to pair products for comparison articles.
+     * Configurable in Content Strategy settings (comma or newline separated) so
+     * the facets aren't hardcoded to one catalog; falls back to the defaults.
+     *
+     * @return array<int, string>
+     */
+    public static function differentiatorSlugs(): array
+    {
+        $raw = trim((string) setting('funnel.comparison_facets', ''));
+
+        if ($raw === '') {
+            return self::DIFFERENTIATOR_SLUGS;
+        }
+
+        $slugs = collect(preg_split('/[,\n]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [])
+            ->map(fn ($s) => \Illuminate\Support\Str::slug(trim($s)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        return $slugs !== [] ? $slugs : self::DIFFERENTIATOR_SLUGS;
+    }
 
     public function run(AiImportBatch $batch): int
     {
@@ -107,7 +132,7 @@ class ComparisonPlanner
     /** @return Collection<int, array{products: array<int, Product>, facet: string}> */
     public function choosePairs(): Collection
     {
-        $facetAttributeIds = Attribute::query()->whereIn('slug', self::DIFFERENTIATOR_SLUGS)->pluck('id');
+        $facetAttributeIds = Attribute::query()->whereIn('slug', self::differentiatorSlugs())->pluck('id');
 
         if ($facetAttributeIds->isEmpty()) {
             return collect();
@@ -137,7 +162,7 @@ class ComparisonPlanner
 
             $countThisCategory = 0;
 
-            foreach (self::DIFFERENTIATOR_SLUGS as $slug) {
+            foreach (self::differentiatorSlugs() as $slug) {
                 if ($countThisCategory >= self::MAX_PAIRS_PER_CATEGORY) {
                     break;
                 }
