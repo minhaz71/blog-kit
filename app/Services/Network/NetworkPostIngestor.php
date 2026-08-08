@@ -25,7 +25,7 @@ class NetworkPostIngestor
     {
         $origin = $hubKey.':'.($data['network_post_id'] ?? '');
 
-        return DB::transaction(function () use ($hubKey, $origin, $data) {
+        $post = DB::transaction(function () use ($hubKey, $origin, $data) {
             $title = trim((string) ($data['title'] ?? 'Untitled article'));
             // Store any bundled in-body images locally and rewrite their URLs
             // BEFORE sanitizing, so the spoke serves them from its own disk.
@@ -97,6 +97,25 @@ class NetworkPostIngestor
 
             return $post;
         });
+
+        // A pushed post must appear immediately: bust the category nav cache and
+        // purge the LiteSpeed edge cache so listings/home aren't stale. (The app
+        // page-cache version already bumps on the Post save above.)
+        $this->flushSpokeCache();
+
+        return $post;
+    }
+
+    /** Clear the spoke's caches so newly received content shows right away. */
+    protected function flushSpokeCache(): void
+    {
+        try {
+            cache()->forget('nav.blog_categories');
+            cache()->forget('nav.categories');
+            app(\App\Services\Performance\LiteSpeedPurger::class)->purgeAll();
+        } catch (\Throwable) {
+            // Cache flushing must never break ingestion.
+        }
     }
 
     /**

@@ -56,7 +56,7 @@ class ThumbnailService
         $subject = $keyword !== '' ? $keyword : $topic;
 
         $lines = [
-            "A high-quality, wide 16:9 blog header illustration about {$subject}.",
+            "A striking, eye-catching, high-quality wide 16:9 blog HERO image about {$subject}.",
         ];
         if ($keyword !== '' && $topic !== '' && mb_strtolower($keyword) !== mb_strtolower($topic)) {
             $lines[] = "It headers an article titled \"{$topic}\".";
@@ -73,7 +73,8 @@ class ThumbnailService
         if ($brand !== '') {
             $lines[] = "Lean on this color/brand cue: {$brand}.";
         }
-        $lines[] = 'Strong single focal subject, balanced composition, professional, uncluttered, suitable as a hero image on a modern blog.';
+        $lines[] = 'Strong single focal subject, balanced rule-of-thirds composition, generous negative space for a title overlay, clear depth and focal clarity.';
+        $lines[] = 'Vibrant yet tasteful color palette, professional studio lighting, crisp modern editorial aesthetic, magazine-cover quality, highly polished and scroll-stopping — and still readable as a small thumbnail.';
         $lines[] = self::NEGATIVE;
 
         return implode(' ', $lines);
