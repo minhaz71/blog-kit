@@ -1,5 +1,14 @@
 # Hemdox BlogKit — Real Keyword & Topic Research (finding → writing → linking)
 
+> **STATUS: IMPLEMENTED** ✅ — a separate **Research → Keyword Research** menu.
+> Paste up to 100 seed keywords → real discovery (DataForSEO + free Google
+> Autocomplete fallback) → intent + funnel staging → SERP-overlap / topic
+> clustering → **Create content plan** → `blog_topic_ideas` → the existing
+> writer → linker → category pipeline. Data source is set in
+> **Research → Research settings** (auto/DataForSEO/Google/LLM + credentials).
+> Live-verified on real Google data; feature-tested. Deploy: `migrate` creates
+> the tables — no extra command.
+
 ## The gap (today)
 
 The pipeline **cluster → write → link → categorize** is already built and real. But the
