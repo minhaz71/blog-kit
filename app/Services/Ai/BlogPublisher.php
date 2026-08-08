@@ -222,7 +222,7 @@ class BlogPublisher
     {
         $clusterName = trim((string) ($item->row['cluster'] ?? ''));
 
-        if ((bool) setting('blog.auto_categorize', true) && $clusterName !== '') {
+        if ((bool) setting('funnel.auto_categorize', true) && $clusterName !== '') {
             $cluster = \App\Models\ContentCluster::resolve($clusterName);
             try {
                 return app(CategoryPlanner::class)->categoryForCluster($cluster);

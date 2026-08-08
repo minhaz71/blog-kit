@@ -57,6 +57,7 @@ class ContentStrategySettings extends Page
             'mix_top', 'mix_middle', 'mix_bottom',
             'min_cluster_links',
             'comparison_facets',
+            'auto_categorize', 'max_categories', 'max_root_categories',
         ];
     }
 
@@ -75,6 +76,9 @@ class ContentStrategySettings extends Page
         $data['mix_middle'] ??= 35;
         $data['mix_bottom'] ??= 20;
         $data['min_cluster_links'] ??= 2;
+        $data['auto_categorize'] ??= true;
+        $data['max_categories'] ??= 20;
+        $data['max_root_categories'] ??= 6;
 
         $this->form->fill($data);
     }
@@ -123,6 +127,26 @@ class ContentStrategySettings extends Page
                         ->numeric()->minValue(0)->maxValue(10)
                         ->helperText('Target used by the Cluster link-health report (spokes ↔ pillar).')
                         ->columnSpanFull(),
+                ]),
+            Section::make('Categories (auto-taxonomy)')
+                ->icon(Heroicon::OutlinedRectangleGroup)
+                ->iconColor('success')
+                ->description(new HtmlString('Blog categories build themselves from your clusters: each cluster becomes a sub-category grouped under an AI-named mother category, filed and added to the menu automatically. Run <strong>Content → Content clusters → Build category tree</strong> to (re)build.'))
+                ->columns(2)
+                ->schema([
+                    \Filament\Forms\Components\Toggle::make('auto_categorize')
+                        ->label('Auto-categorize new posts')
+                        ->default(true)
+                        ->helperText('File each new AI post under its cluster category, creating one if needed.')
+                        ->columnSpanFull(),
+                    TextInput::make('max_categories')
+                        ->label('Max total categories')
+                        ->numeric()->minValue(1)->maxValue(50)
+                        ->helperText('Hard cap. Over-cap clusters attach to their mother instead of a new sub-category.'),
+                    TextInput::make('max_root_categories')
+                        ->label('Max mother categories')
+                        ->numeric()->minValue(1)->maxValue(20)
+                        ->helperText('How many top-level sections clusters are grouped into.'),
                 ]),
             Section::make('Comparisons (store)')
                 ->icon(Heroicon::OutlinedScale)

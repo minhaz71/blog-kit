@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 /**
  * Build the two-level blog category tree (mother → sub) from the existing
- * content clusters, capped at blog.max_categories. Idempotent — safe to run on
+ * content clusters, capped at funnel.max_categories. Idempotent — safe to run on
  * every deploy; a no-op once everything is categorized.
  */
 class BuildCategories extends Command

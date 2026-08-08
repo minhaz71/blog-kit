@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
  * MOTHER categories. Mothers are named by AI when a provider key is set,
  * otherwise a single deterministic mother is used.
  *
- * Hard-capped at blog.max_categories (default 20). Idempotent: re-running
+ * Hard-capped at funnel.max_categories (default 20). Idempotent: re-running
  * re-uses existing categories by slug and never exceeds the cap — over-cap
  * clusters attach to their mother instead of spawning a new sub.
  *
@@ -32,8 +32,8 @@ class CategoryPlanner
             return ['mothers' => 0, 'subs' => 0, 'linked' => 0, 'capped' => 0, 'message' => 'No content clusters yet — nothing to categorize.'];
         }
 
-        $maxTotal = max(1, min(50, (int) setting('blog.max_categories', 20) ?: 20));
-        $maxRoot = max(1, min($maxTotal, (int) setting('blog.max_root_categories', 6) ?: 6));
+        $maxTotal = max(1, min(50, (int) setting('funnel.max_categories', 20) ?: 20));
+        $maxRoot = max(1, min($maxTotal, (int) setting('funnel.max_root_categories', 6) ?: 6));
 
         $groups = $this->groupClusters($clusters, $maxRoot);
 
@@ -198,7 +198,7 @@ SYS;
         $existing = PostCategory::where('slug', $slug)->first();
         if ($existing) {
             if ($reparentAuto && $parentId && $existing->id !== $parentId) {
-                $autoMotherId = (int) setting('blog.auto_mother_category_id');
+                $autoMotherId = (int) setting('funnel.auto_mother_category_id');
                 if ($autoMotherId && $existing->parent_id === $autoMotherId) {
                     $existing->update(['parent_id' => $parentId]);
                 }
@@ -224,14 +224,14 @@ SYS;
      */
     public function defaultMother(): PostCategory
     {
-        $id = (int) setting('blog.auto_mother_category_id');
+        $id = (int) setting('funnel.auto_mother_category_id');
         if ($id && ($m = PostCategory::find($id))) {
             return $m;
         }
 
         $name = trim((string) setting('general.site_name')) ?: 'Topics';
         $mother = $this->resolveCategory($name, null, 0);
-        Setting::set('blog.auto_mother_category_id', $mother->id);
+        Setting::set('funnel.auto_mother_category_id', $mother->id);
 
         return $mother;
     }
@@ -248,7 +248,7 @@ SYS;
             return $cluster->post_category_id;
         }
 
-        $maxTotal = max(1, min(50, (int) setting('blog.max_categories', 20) ?: 20));
+        $maxTotal = max(1, min(50, (int) setting('funnel.max_categories', 20) ?: 20));
         $mother = $this->defaultMother();
 
         // At the cap and this cluster has no category yet → file under the mother.
