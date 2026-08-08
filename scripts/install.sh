@@ -35,8 +35,18 @@ OWNER="${OWNER:-$(stat -c '%U' "/home/$DOMAIN" 2>/dev/null || echo '')}"
 GROUP="${GROUP:-$(stat -c '%G' "/home/$DOMAIN" 2>/dev/null || echo "$OWNER")}"
 [ -z "$OWNER" ] && { echo "ERROR: could not resolve site user; set OWNER=..."; exit 1; }
 
+# The site user's REAL home (CyberPanel uses /home/<domain>, not /home/<user>).
+# Fall back to a writable dir inside the app so npm/git caches never hit an
+# unwritable path.
+USER_HOME="$(getent passwd "$OWNER" 2>/dev/null | cut -d: -f6)"
+if [ -z "$USER_HOME" ] || [ ! -d "$USER_HOME" ]; then
+  USER_HOME="$APP/storage/app/.deploy-home"
+fi
+mkdir -p "$USER_HOME" 2>/dev/null || true
+chown "$OWNER:$GROUP" "$USER_HOME" 2>/dev/null || true
+
 # Run any command AS THE SITE USER (so nothing becomes root-owned).
-as_user() { sudo -u "$OWNER" env HOME="/home/$OWNER" "$@"; }
+as_user() { sudo -u "$OWNER" env HOME="$USER_HOME" "$@"; }
 artisan() { as_user "$PHP" "$APP/artisan" "$@"; }
 
 echo "▸ Site: $DOMAIN | app: $APP | user: $OWNER:$GROUP | php: $PHP"
@@ -116,13 +126,18 @@ if [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
   artisan tinker --execute='$u=\App\Models\User::updateOrCreate(["email"=>"'"$ADMIN_EMAIL"'"],["name"=>"Admin","password"=>bcrypt("'"$ADMIN_PASSWORD"'"),"is_active"=>true,"email_verified_at"=>now()]); $u->assignRole("Super Admin"); echo "admin ready";' || true
 fi
 
-# ── 7. Frontend assets (rebuild if Node present) ─────────────────────────────
-if command -v npm >/dev/null 2>&1; then
+# ── 7. Frontend assets — prefer the committed/CI build; build only if missing ─
+# The repo ships a CI-built public/build, so npm is optional here. Never let an
+# npm hiccup abort the deploy (permissions, low RAM, registry) — keep the
+# committed build as the fallback.
+if [ -f "$APP/public/build/manifest.json" ]; then
+  echo "▸ Using committed/CI-built assets in public/build (skipping npm)."
+elif command -v npm >/dev/null 2>&1; then
   echo "▸ Building frontend assets…"
-  as_user npm ci --no-audit --no-fund
-  as_user env NODE_OPTIONS=--max-old-space-size=2048 npm run build
+  as_user npm ci --no-audit --no-fund || echo "  npm ci failed — keeping existing build."
+  as_user env NODE_OPTIONS=--max-old-space-size=2048 npm run build || echo "  npm build failed — keeping existing build."
 else
-  echo "▸ npm not found — using the committed/CI build in public/build."
+  echo "▸ npm not found — using the committed build in public/build."
 fi
 
 # ── 8. Ownership + permissions (hand everything back to the site user) ───────
