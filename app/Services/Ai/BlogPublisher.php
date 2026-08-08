@@ -76,7 +76,7 @@ class BlogPublisher
                 // AI-derived — carries the compared products to the schema
                 // layer without re-deriving them from the article text.
                 'compared_product_ids' => $item->row['compared_product_ids'] ?? null,
-            ];
+            ] + $this->clusterAttributes($item);
 
             if ($post) {
                 // Refresh: keep the existing title, slug/URL, publish status
@@ -113,6 +113,11 @@ class BlogPublisher
                 }
             }
 
+            // Stitch the cluster graph: record the pillar on the cluster and
+            // point spokes at it. Runs on every publish so it self-heals no
+            // matter which order (pillar-first or spoke-first) they land in.
+            $this->stitchCluster($post);
+
             $item->update(['post_id' => $post->id, 'status' => $held ? 'needs_review' : 'published']);
 
             // Close the loop with the waiting area: the idea that produced
@@ -125,6 +130,80 @@ class BlogPublisher
 
             return $post;
         });
+    }
+
+    /**
+     * The cluster/funnel columns to persist on the Post, resolved from the
+     * item row the funnel builder populated (sendToWriter copies cluster/role/
+     * funnel_stage/primary_keyword into the row). Returns an empty array for a
+     * plain CSV/niche batch that carries none of these — leaving the columns
+     * null so nothing downstream mistakes it for planned cluster content.
+     */
+    protected function clusterAttributes(AiImportItem $item): array
+    {
+        $row = (array) $item->row;
+        $clusterName = trim((string) ($row['cluster'] ?? ''));
+        $role = trim((string) ($row['role'] ?? ''));
+        $stage = trim((string) ($row['funnel_stage'] ?? ''));
+        $primary = trim((string) ($row['primary_keyword'] ?? ''))
+            ?: (ProductWriter::keywordsFor($row)[0] ?? '');
+
+        $out = [];
+
+        if ($clusterName !== '') {
+            $cluster = \App\Models\ContentCluster::resolve($clusterName);
+            $out['cluster'] = $clusterName;
+            $out['content_cluster_id'] = $cluster->id;
+        }
+        if (in_array($role, ['pillar', 'spoke'], true)) {
+            $out['content_role'] = $role;
+        }
+        if (in_array($stage, ['top', 'middle', 'bottom'], true)) {
+            $out['funnel_stage'] = $stage;
+        }
+        if ($primary !== '') {
+            $out['primary_keyword'] = $primary;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Keep the cluster graph consistent after a post is saved:
+     *  - a pillar becomes (or replaces) its cluster's pillar_post_id, and every
+     *    existing spoke in that cluster is pointed at it;
+     *  - a spoke inherits the cluster's current pillar (if one exists yet).
+     * Idempotent — re-running a batch or backfilling converges to the same state.
+     */
+    protected function stitchCluster(Post $post): void
+    {
+        if (! $post->content_cluster_id) {
+            return;
+        }
+
+        $cluster = \App\Models\ContentCluster::find($post->content_cluster_id);
+        if (! $cluster) {
+            return;
+        }
+
+        if ($post->content_role === 'pillar') {
+            if ($cluster->pillar_post_id !== $post->id) {
+                $cluster->update(['pillar_post_id' => $post->id]);
+            }
+            // Point sibling spokes (that don't already) at this pillar.
+            Post::query()
+                ->where('content_cluster_id', $cluster->id)
+                ->where('content_role', 'spoke')
+                ->whereKeyNot($post->id)
+                ->whereNull('pillar_post_id')
+                ->update(['pillar_post_id' => $post->id]);
+
+            if ($post->pillar_post_id) {
+                $post->update(['pillar_post_id' => null]); // a pillar has no pillar
+            }
+        } elseif ($cluster->pillar_post_id && $post->pillar_post_id !== $cluster->pillar_post_id) {
+            $post->update(['pillar_post_id' => $cluster->pillar_post_id]);
+        }
     }
 
     /** Is this item affiliate content? (role, per-row links, or batch mode.) */

@@ -43,6 +43,38 @@ class FunnelPlanner
      */
     public const CHUNK = 10;
 
+    /** The three funnel stages the planner and writer understand. */
+    public const STAGES = ['top', 'middle', 'bottom'];
+
+    /**
+     * Where a BOTTOM-of-funnel (decision) article sends the reader. Chosen in
+     * Content Strategy settings. On a store the natural bottom is the product
+     * catalog; a pure blog routes decision intent to its pillar guide, an
+     * affiliate offer, or the newsletter instead — so the funnel has an end
+     * even with e-commerce off.
+     */
+    public const BOTTOM_TARGETS = [
+        'product' => "the store's own product and category pages",
+        'affiliate' => 'disclosed affiliate product links (external, rel=sponsored)',
+        'pillar' => "the cluster's pillar guide and related in-depth articles",
+        'newsletter' => 'the email newsletter signup as the next step',
+    ];
+
+    /** Resolve the configured bottom-funnel target (with a store-aware default). */
+    public static function bottomTarget(): string
+    {
+        $default = ecommerce_enabled() ? 'product' : 'pillar';
+        $t = (string) setting('funnel.bottom_target', $default);
+
+        return isset(self::BOTTOM_TARGETS[$t]) ? $t : $default;
+    }
+
+    /** One-line, human-readable description of the bottom-funnel destination. */
+    public static function bottomTargetDescription(): string
+    {
+        return self::BOTTOM_TARGETS[self::bottomTarget()];
+    }
+
     public function run(AiImportBatch $batch): int
     {
         $target = max(10, min(200, (int) $batch->topic_count ?: 100));
@@ -127,7 +159,7 @@ class FunnelPlanner
                 'fingerprint' => $fingerprint,
                 'cluster' => $idea['cluster'] ?? 'General',
                 'role' => in_array($idea['role'] ?? '', ['pillar', 'spoke'], true) ? $idea['role'] : 'spoke',
-                'funnel_stage' => in_array($idea['funnel_stage'] ?? '', ['top', 'middle'], true) ? $idea['funnel_stage'] : 'top',
+                'funnel_stage' => in_array($idea['funnel_stage'] ?? '', self::STAGES, true) ? $idea['funnel_stage'] : 'top',
                 'primary_keyword' => $idea['primary_keyword'] ?? null,
                 'secondary_keywords' => array_values((array) ($idea['secondary_keywords'] ?? [])),
                 'pain_point' => $idea['pain_point'] ?? null,
@@ -312,8 +344,18 @@ Rules:
 SYS;
         }
 
+        // Three-stage funnel guidance (the nowdoc system prompt lists only
+        // top|middle for back-compat; this authoritative block adds the
+        // decision stage and tells the model where bottom-funnel intent leads).
+        $stageGuide = "FUNNEL STAGES (funnel_stage may be top, middle OR bottom):\n"
+            ."- top = awareness/informational: explain, teach, answer. ZERO selling.\n"
+            ."- middle = consideration: compare, evaluate, help the reader choose.\n"
+            .'- bottom = decision/transactional: buying guides, "best X" roundups, "is X worth it", "X vs Y — which to buy". These route the reader to '.self::bottomTargetDescription().".\n"
+            .'Aim for a healthy spread: roughly 45% top, 35% middle, 20% bottom.';
+
         $user = 'RESEARCH DOSSIER:\n'.json_encode($insights, JSON_UNESCAPED_UNICODE)
             ."\n\nCLUSTERS:\n".json_encode($clusters, JSON_UNESCAPED_UNICODE)
+            ."\n\n".$stageGuide
             ."\n\nLINKABLE URLS:\n".implode("\n", array_slice($catalogUrls, 0, 80))
             ."\n\nEXISTING ARTICLE TITLES (canonical guard — never overlap these):\n- ".implode("\n- ", array_slice($existing, 0, 80))
             .($accepted !== [] ? "\n\nALREADY ACCEPTED THIS RUN (do not repeat or overlap):\n- ".implode("\n- ", array_column($accepted, 'title')) : '')
@@ -326,7 +368,7 @@ SYS;
             try {
                 $parsed = LlmClient::parseJson($llm->complete(
                     $system,
-                    $user."\n\nGenerate exactly ".count($chunk).' ideas now, spread across the clusters and funnel stages (roughly half top, half middle).',
+                    $user."\n\nGenerate exactly ".count($chunk).' ideas now, spread across the clusters and all three funnel stages (see FUNNEL STAGES above — mostly top and middle, with some bottom/decision ideas).',
                     maxTokens: 16000,
                     cacheStatic: true,
                 ));
@@ -416,8 +458,8 @@ SYS;
                 continue;
             }
 
-            if (! in_array($idea['funnel_stage'] ?? '', ['top', 'middle'], true)) {
-                $reject('funnel stage must be top or middle');
+            if (! in_array($idea['funnel_stage'] ?? '', self::STAGES, true)) {
+                $reject('funnel stage must be top, middle or bottom');
 
                 continue;
             }

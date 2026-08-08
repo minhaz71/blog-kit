@@ -365,8 +365,9 @@ Rules:
 - Every topic must have clear search intent a real person types, and must NOT duplicate or overlap another topic in the cluster or any existing article title provided.
 - Mix intents across the cluster: {$intentMix}.
 - Map keywords per topic: primary = the exact phrase to rank for; 2-4 secondary variations.
+- Assign each topic a funnel_stage: "top" = awareness/informational, "middle" = comparison/consideration, "bottom" = decision/buying-guide. The PILLAR is usually "top"; spread spokes across all three with mostly top/middle and a few bottom.
 - Working titles: specific and compelling, 70 chars or fewer, no clickbait, no colons-everywhere pattern, varied phrasing across the cluster.
-Return ONLY JSON: {"topics": [{"title": "...", "role": "pillar"|"spoke", "primary_keyword": "...", "secondary_keywords": ["..."], "angle": "<one sentence: the specific take/promise of this article>", "outline": ["<4-7 section hints>"]}]}
+Return ONLY JSON: {"topics": [{"title": "...", "role": "pillar"|"spoke", "funnel_stage": "top"|"middle"|"bottom", "primary_keyword": "...", "secondary_keywords": ["..."], "angle": "<one sentence: the specific take/promise of this article>", "outline": ["<4-7 section hints>"]}]}
 SYS;
 
         $user = "SUBJECT AREA: ".trim($batch->niche)
@@ -388,6 +389,13 @@ SYS;
             ->map(fn (array $t) => [
                 'name' => trim((string) $t['title']),
                 'role' => in_array($t['role'] ?? '', ['pillar', 'spoke'], true) ? $t['role'] : 'spoke',
+                // A niche run IS one cluster (1 pillar + its spokes); stamp the
+                // niche as the cluster name + carry the funnel stage so this
+                // path is as cluster/funnel-aware as the Funnel Builder, and the
+                // metadata survives onto the published Post.
+                'cluster' => trim((string) $batch->niche),
+                'funnel_stage' => in_array($t['funnel_stage'] ?? '', FunnelPlanner::STAGES, true) ? $t['funnel_stage'] : 'top',
+                'primary_keyword' => trim((string) ($t['primary_keyword'] ?? '')),
                 'keywords' => collect([(string) ($t['primary_keyword'] ?? '')])
                     ->merge((array) ($t['secondary_keywords'] ?? []))
                     ->map(fn ($k) => trim((string) $k))->filter()->unique()->implode(', '),

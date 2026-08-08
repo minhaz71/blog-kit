@@ -163,7 +163,7 @@ RULES;
     public const FUNNEL_RULES = <<<'RULES'
 FUNNEL ARTICLE RULES (this batch was researched by the Content Cluster & Funnel Builder — each item's data includes funnel_stage, cluster, pain_point, search_query, audience_need, outline and required internal link targets):
 - BEFORE writing, analyze the provided brief: the outline is the researched table-of-contents idea — expand and refine it, do not ignore it. The pain_point and search_query define the reader; answer THEM, not a generic audience.
-- funnel_stage=top: educate and answer, build trust, ZERO selling; product links appear only as natural "if you want to go deeper/try it" references. funnel_stage=middle: help the reader compare, evaluate and choose; product/category links are the natural next step.
+- funnel_stage=top: educate and answer, build trust, ZERO selling; product links appear only as natural "if you want to go deeper/try it" references. funnel_stage=middle: help the reader compare, evaluate and choose; product/category links are the natural next step. funnel_stage=bottom: decision/transactional intent (buying guide, "best X", "is X worth it", "X vs Y") — give a genuinely useful recommendation (a comparison table plus a clear <div class="bd-verdict"> verdict) and end with ONE strong, honest call to action to the bottom-funnel target named below. Still no hype; earn the click.
 - required_links lists researched URLs this article MUST link contextually (they are also in the catalog). Weave every one of them in naturally.
 RULES;
 
@@ -206,6 +206,21 @@ DESIGN TOOLKIT (allowed classes, each styled by the site's blog stylesheet — u
 For affiliate articles only: <a class="bd-affiliate-btn"> a single call-to-action button per recommended product, and <p class="bd-affiliate-note"> the affiliate disclosure.
 These are the ONLY class attributes allowed; anything else is stripped mechanically. Plain semantic tags (h2, h3, p, ul, ol, table, blockquote) are already beautifully styled by the site — never fake structure with the toolkit when a plain tag is right.
 RULES;
+
+    /**
+     * Target-specific CTA instruction for bottom-funnel articles, keyed off the
+     * Content Strategy "bottom target" setting so a decision-stage article ends
+     * with the RIGHT next step whether the store is on, off, or affiliate.
+     */
+    public static function bottomCtaHint(): string
+    {
+        return match (FunnelPlanner::bottomTarget()) {
+            'product' => 'Close by linking the most relevant product or category page from the catalog as the clear next step.',
+            'affiliate' => 'Close with the affiliate recommendation using a single <a class="bd-affiliate-btn"> button per pick (disclosure required); use ONLY the affiliate URLs provided.',
+            'newsletter' => 'Close with a calm invitation to subscribe to the newsletter for more guidance — no product hard-sell.',
+            default => "Close by linking UP to the cluster's pillar guide and one closely related in-depth article as the next step (no hard product sell).",
+        };
+    }
 
     /** Stable per-batch instruction block. MUST NOT vary between items (prompt cache). */
     public static function systemFor(AiImportBatch $batch): string
@@ -250,7 +265,9 @@ RULES;
         // Funnel batches (sent from the Blog Ideas waiting area) carry the
         // full research brief per item.
         if ($batch->funnel_rounds !== null) {
-            $sections[] = self::FUNNEL_RULES;
+            $sections[] = self::FUNNEL_RULES
+                ."\n\nBOTTOM-FUNNEL TARGET (where funnel_stage=bottom articles lead the reader): "
+                .FunnelPlanner::bottomTargetDescription().'. '.self::bottomCtaHint();
         }
 
         // Comparison items (from ComparisonPlanner, sent via the same
@@ -349,10 +366,50 @@ JSON;
             .static::affiliateBlock($item->row)
             .($digest !== '' ? "\n\n".$digest : '')
             .($learned !== '' ? "\n\n".$learned : '')
+            .static::titleDirective($item->row)
             .static::keywordDirective($item->row)
             ."\n\nTARGET LENGTH: ".static::lengthDirective($item->row)
             ."\n\nSTRUCTURE VARIATION for this article: {$directive}"
             ."\n\nReturn the JSON now.";
+    }
+
+    /**
+     * Ties the H1/meta title to the article's place in the content map so a
+     * PILLAR reads as the cluster's broad hub and a SPOKE as a specific facet
+     * that never competes with its pillar. Fires only when the row carries the
+     * funnel builder's cluster/role/stage — plain CSV articles skip it.
+     */
+    public static function titleDirective(array $row): string
+    {
+        $cluster = trim((string) ($row['cluster'] ?? ''));
+        $role = trim((string) ($row['role'] ?? ''));
+        $stage = trim((string) ($row['funnel_stage'] ?? ''));
+
+        if ($cluster === '' && $role === '' && $stage === '') {
+            return '';
+        }
+
+        $stageMap = [
+            'top' => 'awareness/informational intent — explain or answer, no selling',
+            'middle' => 'consideration intent — compare, evaluate, help the reader choose',
+            'bottom' => 'decision intent — a buying guide / best-X / verdict that leads to the next step',
+        ];
+
+        $lines = ["TITLE & POSITIONING (shape the H1 title AND meta_title to this article's place in the content map):"];
+
+        if ($cluster !== '') {
+            $lines[] = "- Cluster: \"{$cluster}\" — this article is one node of that topic cluster.";
+        }
+        if ($role === 'pillar') {
+            $lines[] = '- Role: PILLAR (the hub). Title must be broad and authoritative — the definitive guide the whole cluster orbits. Not a narrow long-tail question.';
+        } elseif ($role === 'spoke') {
+            $lines[] = "- Role: SPOKE. Title must be specific and long-tail — one clear facet of the cluster. It must NOT restate or compete with the pillar's broad title.";
+        }
+        if (isset($stageMap[$stage])) {
+            $lines[] = "- Funnel stage: {$stage} — {$stageMap[$stage]}. Match the title's promise to this intent.";
+        }
+
+        return "\n\n".implode("\n", $lines);
     }
 
     /**

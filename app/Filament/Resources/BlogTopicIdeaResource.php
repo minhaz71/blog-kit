@@ -81,8 +81,12 @@ class BlogTopicIdeaResource extends Resource
                 TextColumn::make('title')->searchable()->wrap()->weight('semibold')
                     ->description(fn (BlogTopicIdea $r) => $r->pain_point ? 'Pain: '.mb_substr($r->pain_point, 0, 90) : null),
                 TextColumn::make('funnel_stage')->badge()
-                    ->color(fn (string $state) => $state === 'top' ? 'info' : 'warning')
-                    ->formatStateUsing(fn (string $state) => $state === 'top' ? 'Top funnel' : 'Middle funnel'),
+                    ->color(fn (string $state) => match ($state) {
+                        'top' => 'info', 'middle' => 'warning', 'bottom' => 'danger', default => 'gray',
+                    })
+                    ->formatStateUsing(fn (string $state) => match ($state) {
+                        'top' => 'Top funnel', 'middle' => 'Middle funnel', 'bottom' => 'Bottom funnel', default => $state,
+                    }),
                 TextColumn::make('cluster')->badge()->color('gray')->searchable(),
                 TextColumn::make('role')->badge()->color(fn (string $state) => match ($state) {
                     'pillar' => 'success', 'comparison' => 'warning', default => 'gray',
@@ -98,7 +102,7 @@ class BlogTopicIdeaResource extends Resource
                 SelectFilter::make('status')->options([
                     'waiting' => 'Waiting', 'queued' => 'Queued', 'written' => 'Written', 'dismissed' => 'Dismissed',
                 ])->default('waiting'),
-                SelectFilter::make('funnel_stage')->options(['top' => 'Top funnel', 'middle' => 'Middle funnel']),
+                SelectFilter::make('funnel_stage')->options(['top' => 'Top funnel', 'middle' => 'Middle funnel', 'bottom' => 'Bottom funnel']),
                 SelectFilter::make('role')->options([
                     'pillar' => 'Pillar', 'spoke' => 'Spoke', 'comparison' => 'Comparison',
                 ]),
@@ -234,6 +238,7 @@ class BlogTopicIdeaResource extends Resource
                     'funnel_stage' => $idea->funnel_stage,
                     'cluster' => $idea->cluster,
                     'role' => $idea->role,
+                    'primary_keyword' => (string) $idea->primary_keyword,
                     'pain_point' => (string) $idea->pain_point,
                     'search_query' => (string) $idea->search_query,
                     'audience_need' => (string) $idea->audience_need,

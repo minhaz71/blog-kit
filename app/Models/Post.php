@@ -52,6 +52,36 @@ class Post extends Model
             ->values();
     }
 
+    /** The canonical topic cluster this post belongs to (pillar + spokes). */
+    public function cluster()
+    {
+        return $this->belongsTo(ContentCluster::class, 'content_cluster_id');
+    }
+
+    /** The pillar/hub post a spoke supports (null for a pillar or an unplanned post). */
+    public function pillarPost()
+    {
+        return $this->belongsTo(Post::class, 'pillar_post_id');
+    }
+
+    /** Sibling spokes in the same cluster (excludes this post). */
+    public function clusterSpokes()
+    {
+        if (! $this->content_cluster_id) {
+            return Post::query()->whereRaw('1 = 0'); // no cluster → no siblings
+        }
+
+        return Post::query()
+            ->where('content_cluster_id', $this->content_cluster_id)
+            ->where('status', 'published')
+            ->whereKeyNot($this->getKey());
+    }
+
+    public function isPillar(): bool
+    {
+        return $this->content_role === 'pillar';
+    }
+
     /** Keep at most this many revisions per post (WordPress-style history). */
     public const MAX_REVISIONS = 30;
 
