@@ -23,7 +23,10 @@ class CreateKeywordResearch extends CreateRecord
 
     protected function afterCreate(): void
     {
-        RunKeywordResearchJob::dispatch($this->record->id);
+        // Detached process (no web-request timeout); queue fallback if it can't spawn.
+        if (! \App\Support\BackgroundProcess::artisan(['keyword:research', (string) $this->record->id])) {
+            RunKeywordResearchJob::dispatch($this->record->id);
+        }
 
         Notification::make()
             ->title('Research started')

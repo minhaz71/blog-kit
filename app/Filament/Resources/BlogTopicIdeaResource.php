@@ -274,17 +274,25 @@ class BlogTopicIdeaResource extends Resource
                 'status' => 'pending',
             ]);
 
-            // Mark queued BEFORE dispatching: on a sync queue the job runs
-            // inside dispatch() and sets the idea to "written" — updating
-            // after would overwrite that final status.
+            // Items are created 'pending'; the batch RUNNER (below) writes them.
+            // Never dispatch the heavy writer inline here — on a sync queue that
+            // would run every LLM write inside the web request and time out.
             $idea->update(['status' => 'queued', 'writer_batch_id' => $batch->id]);
-            \App\Jobs\WriteAiBlogPost::dispatch($item->id);
         }
 
         $batch->forceFill(['total_items' => $ideas->count(), 'topic_count' => $ideas->count()])->save();
 
         \App\Models\AiActivityLog::write($batch->id, null, 'plan',
             '🧠 Plan ready — '.$ideas->count().' article(s) from the funnel waiting area (research pre-attached).', 'success');
+
+        // Write in a DETACHED background process (no web-request timeout). Falls
+        // back to queued jobs only if a process can't be spawned.
+        $launched = \App\Support\BackgroundProcess::artisan(['ai:run-batch', (string) $batch->id]);
+        if (! $launched) {
+            foreach ($batch->items()->pluck('id') as $itemId) {
+                \App\Jobs\WriteAiBlogPost::dispatch($itemId);
+            }
+        }
 
         return $batch;
     }
