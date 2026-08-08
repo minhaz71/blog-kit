@@ -55,6 +55,7 @@ class AdminAccess
         \App\Filament\Resources\PostCategoryResource::class => ['access_post_categories', 'Blog categories', 'Content'],
         \App\Filament\Resources\PageResource::class => ['access_pages', 'Pages', 'Content'],
         \App\Filament\Resources\BlogTopicIdeaResource::class => ['access_blog_ideas', 'Blog ideas', 'Content'],
+        \App\Filament\Resources\ContentClusterResource::class => ['access_content_clusters', 'Content clusters', 'Content'],
         \App\Filament\Resources\AiBlogBatchResource::class => ['access_ai_blog_batches', 'AI blog batches', 'Content'],
         \App\Filament\Resources\ContentBlockResource::class => ['access_content_blocks', 'Content blocks', 'Content'],
         \App\Filament\Resources\HomepageSectionResource::class => ['access_homepage_sections', 'Homepage sections', 'Content'],
