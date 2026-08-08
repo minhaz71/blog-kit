@@ -14,6 +14,10 @@ class PostCategory extends Model
 
     protected static function booted(): void
     {
+        // Keep the auto-built header menu fresh when categories change.
+        static::saved(fn () => cache()->forget('nav.blog_categories'));
+        static::deleted(fn () => cache()->forget('nav.blog_categories'));
+
         // Deleting a blog category must NEVER delete its posts. The FK is
         // nullOnDelete, which would leave posts uncategorised — instead we
         // move them onto the default blog category first, so every post

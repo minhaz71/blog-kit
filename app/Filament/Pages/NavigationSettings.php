@@ -47,7 +47,7 @@ class NavigationSettings extends Page
 
     protected function keys(): array
     {
-        return ['logo', 'header_menu', 'footer_columns', 'footer_text', 'show_newsletter',
+        return ['logo', 'header_menu', 'auto_blog_categories', 'footer_columns', 'footer_text', 'show_newsletter',
             'footer_address', 'footer_phone', 'footer_email', 'footer_hours'];
     }
 
@@ -77,6 +77,10 @@ class NavigationSettings extends Page
             Section::make('Header menu')
                 ->description('Menu items in order. Leave empty to auto-build the menu from your top categories. Add sub-items to create a dropdown.')
                 ->schema([
+                    \Filament\Forms\Components\Toggle::make('auto_blog_categories')
+                        ->label('Auto-add blog categories to the menu')
+                        ->default(true)
+                        ->helperText('When the menu above is empty, build it from your blog mother categories (with sub-categories as dropdowns). Turn off to fall back to just Home + Blog.'),
                     Repeater::make('header_menu')
                         ->hiddenLabel()
                         ->schema([

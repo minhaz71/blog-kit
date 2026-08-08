@@ -13,40 +13,69 @@
         ->all();
 
     if (empty($menu)) {
-        // Cache raw arrays (not Eloquent Collections) — some cache stores can't
-        // rehydrate Collection instances cleanly across requests.
-        $navCategories = cache()->remember('nav.categories', 3600, fn () =>
-            \App\Models\Category::active()->root()->orderBy('sort_order')->take(6)
-                ->with(['children' => fn ($q) => $q->active()->orderBy('sort_order')->limit(6)])
+        $commerce = ecommerce_enabled();
+        $autoBlogCats = (bool) setting('navigation.auto_blog_categories', true);
+
+        // Blog category tree (mother → subs) for the auto menu. Only mothers
+        // with posts or sub-categories are shown, so empty shells never appear.
+        // Cache raw arrays (not Eloquent Collections) for cross-request safety.
+        $blogNav = $autoBlogCats ? cache()->remember('nav.blog_categories', 3600, fn () =>
+            \App\Models\PostCategory::query()->where('is_active', true)->whereNull('parent_id')
+                ->where('show_in_menu', true)->orderBy('sort_order')->orderBy('name')->take(6)
+                ->withCount('posts')
+                ->with(['children' => fn ($q) => $q->where('is_active', true)->where('show_in_menu', true)->orderBy('sort_order')->limit(8)])
                 ->get(['id', 'name', 'slug'])
                 ->map(fn ($c) => [
-                    'id' => $c->id,
                     'name' => $c->name,
                     'slug' => $c->slug,
+                    'posts_count' => $c->posts_count,
                     'children' => $c->children->map(fn ($ch) => ['name' => $ch->name, 'slug' => $ch->slug])->all(),
                 ])
-                ->all()
-        );
+                ->filter(fn ($c) => $c['posts_count'] > 0 || count($c['children']) > 0)
+                ->values()->all()
+        ) : [];
 
-        $menu = collect($navCategories)->map(fn ($c) => [
-            'label' => $c['name'],
-            'url' => \App\Support\Permalinks::category($c['slug']),
-            'children' => collect($c['children'])->map(fn ($ch) => [
-                'label' => $ch['name'],
-                'url' => \App\Support\Permalinks::category($ch['slug']),
-            ])->all(),
-        ])->values();
+        if ($commerce) {
+            // Ecommerce: product categories lead; blog categories fold into one
+            // "Blog" dropdown so the bar doesn't become a giant mixed list.
+            $navCategories = cache()->remember('nav.categories', 3600, fn () =>
+                \App\Models\Category::active()->root()->orderBy('sort_order')->take(6)
+                    ->with(['children' => fn ($q) => $q->active()->orderBy('sort_order')->limit(6)])
+                    ->get(['id', 'name', 'slug'])
+                    ->map(fn ($c) => [
+                        'name' => $c->name,
+                        'slug' => $c->slug,
+                        'children' => $c->children->map(fn ($ch) => ['name' => $ch->name, 'slug' => $ch->slug])->all(),
+                    ])
+                    ->all()
+            );
 
-        // The Shop link only makes sense with the ecommerce module on. A pure
-        // blog site leads with Home + Blog instead (no product categories exist
-        // to populate the fallback, so the list would otherwise be Shop+Blog).
-        if (ecommerce_enabled()) {
-            $menu = $menu->prepend(['label' => 'Shop', 'url' => route('shop'), 'children' => []]);
+            $menu = collect($navCategories)->map(fn ($c) => [
+                'label' => $c['name'],
+                'url' => \App\Support\Permalinks::category($c['slug']),
+                'children' => collect($c['children'])->map(fn ($ch) => [
+                    'label' => $ch['name'],
+                    'url' => \App\Support\Permalinks::category($ch['slug']),
+                ])->all(),
+            ])->values()->prepend(['label' => 'Shop', 'url' => route('shop'), 'children' => []]);
+
+            $blogChildren = collect($blogNav)->map(fn ($c) => ['label' => $c['name'], 'url' => route('blog.category', $c['slug'])])->all();
+            $menu = $menu->push(['label' => 'Blog', 'url' => route('blog.index'), 'children' => $blogChildren])->all();
         } else {
-            $menu = $menu->prepend(['label' => 'Home', 'url' => route('home'), 'children' => []]);
+            // Pure blog: mother categories are the top-level items, their
+            // sub-categories the dropdown children.
+            $menu = collect($blogNav)->map(fn ($c) => [
+                'label' => $c['name'],
+                'url' => route('blog.category', $c['slug']),
+                'children' => collect($c['children'])->map(fn ($ch) => [
+                    'label' => $ch['name'],
+                    'url' => route('blog.category', $ch['slug']),
+                ])->all(),
+            ])
+                ->prepend(['label' => 'Home', 'url' => route('home'), 'children' => []])
+                ->push(['label' => 'Blog', 'url' => route('blog.index'), 'children' => []])
+                ->all();
         }
-
-        $menu = $menu->push(['label' => 'Blog', 'url' => route('blog.index'), 'children' => []])->all();
     }
 
     // Header design tokens (Admin → Appearance → Header design).
