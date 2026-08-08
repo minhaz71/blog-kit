@@ -68,6 +68,23 @@ class MonitorAiImportBatch extends Page
         return 'Live monitor — '.$this->record->name;
     }
 
+    /** Show where this batch's articles are headed (this site vs a connected spoke). */
+    public function getSubheading(): ?string
+    {
+        if (! function_exists('is_network_hub') || ! is_network_hub()) {
+            return null;
+        }
+
+        $ids = array_values(array_filter((array) $this->record->network_site_ids));
+        if ($ids === []) {
+            return 'Target: This site';
+        }
+
+        $names = \App\Models\ConnectedSite::whereIn('id', $ids)->pluck('name')->all();
+
+        return 'Target: '.($names !== [] ? implode(', ', $names) : 'This site').' (connected site) — kept as a hidden draft here, pushed there.';
+    }
+
     public function pauseBatch(): void
     {
         if ($this->record->status === 'processing') {

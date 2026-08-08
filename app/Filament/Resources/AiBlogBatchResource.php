@@ -263,6 +263,17 @@ class AiBlogBatchResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->searchable()->weight(\Filament\Support\Enums\FontWeight::SemiBold),
+                TextColumn::make('target_sites')->label('Target')->badge()->color('info')
+                    ->state(function ($record): string {
+                        $ids = array_values(array_filter((array) $record->network_site_ids));
+                        if ($ids === []) {
+                            return 'This site';
+                        }
+                        $names = \App\Models\ConnectedSite::whereIn('id', $ids)->pluck('name')->all();
+
+                        return $names !== [] ? implode(', ', $names) : 'This site';
+                    })
+                    ->visible(fn () => network_enabled() && is_network_hub()),
                 TextColumn::make('niche')->limit(40)->placeholder('Own titles')->toggleable(),
                 TextColumn::make('provider')
                     ->badge()

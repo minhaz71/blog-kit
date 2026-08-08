@@ -63,6 +63,14 @@ class ListBlogTopicIdeas extends ListRecords
                         ->native(false)
                         ->searchable()
                         ->placeholder(fn (Get $get): string => 'Provider default — '.LlmClient::defaultModel($get('provider') ?: 'anthropic')),
+                    Select::make('site_id')
+                        ->label('Target site')
+                        ->options(fn () => ['' => 'This site'] + \App\Models\ConnectedSite::query()
+                            ->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+                        ->default('')
+                        ->native(false)
+                        ->visible(fn () => network_enabled() && is_network_hub())
+                        ->helperText('Plan a cluster/funnel FOR a connected site. Ideas are deduped against that site and tagged so the finished articles push there.'),
                     Textarea::make('niche')
                         ->label('Focus niche (optional)')
                         ->rows(2)
@@ -74,6 +82,7 @@ class ListBlogTopicIdeas extends ListRecords
                         ->default(AiImportBatch::DEFAULT_STORE_BRIEF),
                 ])
                 ->action(function (array $data): void {
+                    $siteId = ($data['site_id'] ?? '') !== '' ? (int) $data['site_id'] : null;
                     $batch = AiImportBatch::create([
                         'kind' => 'blog_ideas',
                         'csv_path' => '',
@@ -85,6 +94,8 @@ class ListBlogTopicIdeas extends ListRecords
                         'model' => $data['model'] ?? null,
                         'topic_count' => (int) $data['topic_count'],
                         'funnel_rounds' => (int) $data['funnel_rounds'],
+                        // The target spoke (empty = this site) — FunnelPlanner reads this.
+                        'network_site_ids' => $siteId ? [$siteId] : [],
                         'link_scope' => 'ecommerce',
                         'status' => 'pending',
                     ]);

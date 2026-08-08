@@ -129,7 +129,10 @@ class FunnelPlanner
         $clusters = $this->designClusters($llm, $batch, $insights, $target);
 
         // ── Pass 3+: generate → verify (deterministic + LLM) → refill ─
-        $existing = $this->existingTitles();
+        // Target spoke (from the batch's network_site_ids) → dedupe against
+        // THAT site's mirrored posts and tag the resulting ideas with it.
+        $targetSiteId = $this->targetSiteId($batch);
+        $existing = $this->existingTitlesFor($targetSiteId);
         $accepted = [];
         $rejectedTitles = [];
 
@@ -193,6 +196,7 @@ class FunnelPlanner
 
             BlogTopicIdea::create([
                 'batch_id' => $batch->id,
+                'site_id' => $targetSiteId,
                 'title' => $idea['title'],
                 'fingerprint' => $fingerprint,
                 'cluster' => $idea['cluster'] ?? 'General',
@@ -592,8 +596,25 @@ SYS;
         return '/'.mb_strtolower(trim($path, '/'));
     }
 
-    protected function existingTitles(): array
+    /** The target spoke for this research run (first network_site_id), or null (this site). */
+    protected function targetSiteId(AiImportBatch $batch): ?int
     {
-        return Post::query()->pluck('title')->map(fn ($t) => trim((string) $t))->filter()->values()->all();
+        $ids = array_values(array_filter(array_map('intval', (array) $batch->network_site_ids)));
+
+        return $ids[0] ?? null;
+    }
+
+    /**
+     * Existing titles to dedupe against: this site's posts by default, or the
+     * TARGET spoke's mirrored posts (NetworkRemotePost) when planning for one —
+     * so a per-site plan competes only with that site's content.
+     */
+    protected function existingTitlesFor(?int $siteId): array
+    {
+        $query = $siteId
+            ? \App\Models\NetworkRemotePost::query()->where('site_id', $siteId)
+            : Post::query();
+
+        return $query->pluck('title')->map(fn ($t) => trim((string) $t))->filter()->values()->all();
     }
 }

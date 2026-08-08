@@ -91,6 +91,8 @@ class BlogTopicIdeaResource extends Resource
                 TextColumn::make('role')->badge()->color(fn (string $state) => match ($state) {
                     'pillar' => 'success', 'comparison' => 'warning', default => 'gray',
                 }),
+                TextColumn::make('site.name')->label('For site')->badge()->color('info')
+                    ->placeholder('This site')->visible(fn () => network_enabled() && is_network_hub()),
                 TextColumn::make('primary_keyword')->toggleable()->searchable(),
                 TextColumn::make('verified_rounds')->label('Checks')->alignCenter(),
                 TextColumn::make('status')->badge()->color(fn (string $state) => match ($state) {
@@ -109,6 +111,13 @@ class BlogTopicIdeaResource extends Resource
                 SelectFilter::make('cluster')->options(
                     fn () => BlogTopicIdea::query()->distinct()->orderBy('cluster')->pluck('cluster', 'cluster')->all()
                 )->searchable(),
+                SelectFilter::make('site_id')->label('Target site')
+                    ->options(fn () => ['local' => 'This site'] + \App\Models\ConnectedSite::query()
+                        ->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+                    ->query(fn ($query, array $data) => filled($data['value'] ?? null)
+                        ? ($data['value'] === 'local' ? $query->whereNull('site_id') : $query->where('site_id', $data['value']))
+                        : $query)
+                    ->visible(fn () => network_enabled() && is_network_hub()),
             ])
             ->recordActions([
                 \Filament\Actions\Action::make('send')

@@ -23,6 +23,12 @@ class BlogTopicIdea extends Model
         return $this->belongsTo(Post::class);
     }
 
+    /** The connected spoke this idea targets (null = this/local site). */
+    public function site()
+    {
+        return $this->belongsTo(ConnectedSite::class, 'site_id');
+    }
+
     /**
      * Normalized token-set fingerprint — same technique as the link agent:
      * lowercase, strip punctuation, drop trivial words, sort tokens. Titles
