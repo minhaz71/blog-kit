@@ -3,6 +3,11 @@
 **Audit + fix plan.** Everything here is pull-safe: all DB changes are *additive, nullable*
 migrations (no drops, no data loss), so pulling on the live site cannot harm it.
 
+> **STATUS: all 7 phases implemented** (branch `claude/blogkit-home-page-design-843738`).
+> Run `php artisan blogkit:backfill-clusters` after deploy to stamp existing posts.
+> Tune behaviour in **Admin → SEO → Content strategy**; view the plan in
+> **Admin → Content → Content clusters**.
+
 ---
 
 ## TL;DR — what's the real state?

@@ -244,11 +244,17 @@ cd $APP && git pull \
   && COMPOSER_ALLOW_SUPERUSER=1 $PHP $(command -v composer) install --no-dev --optimize-autoloader \
   && npm ci && npm run build \
   && $PHP artisan migrate --force \
+  && sudo -u $OWNER $PHP artisan blogkit:backfill-clusters \
   && chown -R $OWNER:$GROUP "$APP" \
   && sudo -u $OWNER $PHP artisan optimize:clear \
   && sudo -u $OWNER $PHP artisan cache:clear \
   && (rm -rf /usr/local/lsws/cachedata/* 2>/dev/null; systemctl restart lsws)
 ```
+
+> `blogkit:backfill-clusters` is idempotent — it stamps cluster/funnel metadata
+> onto posts published before those columns existed and stitches pillar↔spoke
+> links. Safe to run every deploy; a no-op once everything is backfilled. Tune
+> the funnel/cluster behaviour in **Admin → SEO → Content strategy**.
 
 The `cache:clear` + LiteSpeed flush at the end are **required after a rebuild**
 (otherwise cached HTML serves the old asset hash → 404 → unstyled). Then
