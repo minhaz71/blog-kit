@@ -511,6 +511,153 @@ class SchemaGenerator
         ];
     }
 
+    /**
+     * HowTo schema derived from the article's own <ol class="bd-steps"> block
+     * (the numbered how-to markup the writer already emits). Only built when a
+     * genuine step list exists (2+ steps) — never fabricated. Gives step-based
+     * articles a shot at HowTo rich results and clean AI-answer extraction.
+     */
+    public function howTo(Post $post): ?array
+    {
+        $html = (string) $post->content;
+
+        if (! str_contains($html, 'bd-steps')) {
+            return null;
+        }
+
+        $dom = $this->domFromHtml($html);
+        if (! $dom) {
+            return null;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $list = $xpath->query("//ol[contains(concat(' ', normalize-space(@class), ' '), ' bd-steps ')]")->item(0);
+
+        if (! $list) {
+            return null;
+        }
+
+        $steps = [];
+        foreach ($list->childNodes as $li) {
+            if (! ($li instanceof \DOMElement) || strtolower($li->nodeName) !== 'li') {
+                continue;
+            }
+            $text = trim(preg_replace('/\s+/', ' ', (string) $li->textContent));
+            if ($text === '') {
+                continue;
+            }
+            $position = count($steps) + 1;
+            $steps[] = array_filter([
+                '@type' => 'HowToStep',
+                'position' => $position,
+                // A short leading clause names the step; the full text is the detail.
+                'name' => str(preg_split('/(?<=[.!?:])\s/', $text)[0] ?? $text)->limit(80)->toString(),
+                'text' => str($text)->limit(500)->toString(),
+                'url' => $post->url().'#step-'.$position,
+            ]);
+        }
+
+        if (count($steps) < 2) {
+            return null;
+        }
+
+        return [
+            '@type' => 'HowTo',
+            '@id' => $post->url().'#howto',
+            'name' => str($post->title)->limit(110)->toString(),
+            'step' => $steps,
+        ];
+    }
+
+    /**
+     * FAQPage derived from an inline <div class="bd-faq"> block when the post
+     * has NO stored FAQ relation — so a manually written or older article with
+     * an in-body FAQ still emits FAQ schema. Questions are the block's headings
+     * (h2-h4 or a lone <strong>); each answer is the text up to the next
+     * question. Requires 2+ well-formed pairs.
+     */
+    public function faqFromContent(Post $post, string $url): ?array
+    {
+        $html = (string) $post->content;
+
+        if (! str_contains($html, 'bd-faq')) {
+            return null;
+        }
+
+        $dom = $this->domFromHtml($html);
+        if (! $dom) {
+            return null;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $block = $xpath->query("//div[contains(concat(' ', normalize-space(@class), ' '), ' bd-faq ')]")->item(0);
+
+        if (! $block) {
+            return null;
+        }
+
+        $pairs = [];
+        $question = null;
+        $answer = '';
+
+        $flush = function () use (&$pairs, &$question, &$answer): void {
+            $q = trim((string) $question);
+            $a = trim(preg_replace('/\s+/', ' ', $answer));
+            if ($q !== '' && $a !== '') {
+                $pairs[] = ['q' => $q, 'a' => $a];
+            }
+            $question = null;
+            $answer = '';
+        };
+
+        foreach ($block->childNodes as $node) {
+            if (! ($node instanceof \DOMElement)) {
+                continue;
+            }
+            $tag = strtolower($node->nodeName);
+            $isHeading = in_array($tag, ['h2', 'h3', 'h4', 'h5'], true)
+                || ($tag === 'p' && $node->getElementsByTagName('strong')->length === 1 && trim($node->textContent) === trim($node->getElementsByTagName('strong')->item(0)->textContent));
+
+            if ($isHeading) {
+                $flush();
+                $question = trim(preg_replace('/\s+/', ' ', (string) $node->textContent));
+            } else {
+                $answer .= ' '.$node->textContent;
+            }
+        }
+        $flush();
+
+        if (count($pairs) < 2) {
+            return null;
+        }
+
+        return [
+            '@type' => 'FAQPage',
+            '@id' => $url.'#faq',
+            'mainEntity' => collect($pairs)->map(fn ($p) => [
+                '@type' => 'Question',
+                'name' => str($p['q'])->limit(300)->toString(),
+                'acceptedAnswer' => ['@type' => 'Answer', 'text' => str($p['a'])->limit(1200)->toString()],
+            ])->all(),
+        ];
+    }
+
+    /** Parse an HTML fragment into a DOMDocument (UTF-8 safe), or null. */
+    protected function domFromHtml(string $html): ?\DOMDocument
+    {
+        if (trim($html) === '') {
+            return null;
+        }
+
+        $dom = new \DOMDocument;
+        $prev = libxml_use_internal_errors(true);
+        $ok = $dom->loadHTML('<?xml encoding="UTF-8"><div>'.$html.'</div>', LIBXML_NOERROR | LIBXML_NOWARNING);
+        libxml_clear_errors();
+        libxml_use_internal_errors($prev);
+
+        return $ok ? $dom : null;
+    }
+
     public function webPage(Page $page): array
     {
         // Admin can override the page type via seo_meta.schema_type —

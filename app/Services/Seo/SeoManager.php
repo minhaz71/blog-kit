@@ -201,7 +201,17 @@ class SeoManager
 
         if ($meta?->schema_enabled ?? true) {
             $schemas[] = $this->schema->article($post);
-            $schemas[] = $this->schema->faqPage($post->faqs, $post->url());
+
+            // FAQ: prefer the stored relation; fall back to an inline bd-faq
+            // block so a manually written article still emits FAQ schema.
+            $faq = $this->schema->faqPage($post->faqs, $post->url())
+                ?? $this->schema->faqFromContent($post, $post->url());
+            $schemas[] = $faq;
+
+            // HowTo from the article's own bd-steps block (only when present).
+            if ($howTo = $this->schema->howTo($post)) {
+                $schemas[] = $howTo;
+            }
 
             if ($comparison = $this->schema->comparisonItemList($post)) {
                 $schemas[] = $comparison;
