@@ -26,16 +26,36 @@ class MonitorAiImportBatch extends Page
      * blog-only site (via access_ai_blog_batches); a product batch keeps the
      * resource's ecommerce gate.
      */
+    /**
+     * This monitor is shared by the AI BLOG pipeline and the ecommerce AI
+     * PRODUCT importer. Its resource is ecommerce-gated (403 when the store is
+     * off), which wrongly blocked blog-batch monitoring on a blog-only site.
+     * Filament calls canAccess() with NO record (and again on every Livewire
+     * update), so we can't gate by the specific batch reliably — instead allow
+     * anyone who can access EITHER AI batches. Both are admin-level content
+     * tools, so this is safe.
+     */
     public static function canAccess(array $parameters = []): bool
     {
-        $record = $parameters['record'] ?? null;
-        $batch = $record instanceof AiImportBatch ? $record : ($record ? AiImportBatch::find($record) : null);
+        return static::mayMonitor();
+    }
 
-        if ($batch && in_array($batch->kind, self::BLOG_KINDS, true)) {
-            return (bool) auth()->user()?->can('access_ai_blog_batches');
-        }
+    /**
+     * The base resource Page enforces access via the CanAuthorizeResourceAccess
+     * trait's mount/hydrate hooks, which call authorizeResourceAccess() and abort
+     * 403 on the RESOURCE's gate (ecommerce) — bypassing canAccess(). Override it
+     * so a blog-only site (store off) can still monitor blog batches.
+     */
+    public static function authorizeResourceAccess(): void
+    {
+        abort_unless(static::mayMonitor(), 403);
+    }
 
-        return AiImportBatchResource::canAccess();
+    /** Allow anyone who can access EITHER the AI blog or AI product batches. */
+    protected static function mayMonitor(): bool
+    {
+        return (bool) auth()->user()?->can('access_ai_blog_batches')
+            || AiImportBatchResource::canAccess();
     }
 
     public function mount(AiImportBatch $record): void
