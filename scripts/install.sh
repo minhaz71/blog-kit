@@ -5,11 +5,21 @@
 # It performs the full deploy AND sets up the background processes (scheduler
 # cron + queue worker) and permissions that a fresh CyberPanel site is missing.
 #
-# Usage (as root, from the site's public_html, or pass DOMAIN):
+# Zero-touch: it CREATES the MySQL database + user automatically (like
+# `wp core install` / `wp db create`) — no phpMyAdmin, no manual .env editing.
+#
+# Simplest (fully automatic — DB name/user/password derived + generated):
+#   DOMAIN=puffandpod.com ADMIN_EMAIL=you@x.com ADMIN_PASSWORD='StrongPass!' \
+#   bash scripts/install.sh
+#
+# Bring your own DB credentials (created if missing):
 #   DOMAIN=puffandpod.com \
 #   DB_DATABASE=puff_db DB_USERNAME=puff_user DB_PASSWORD='secret' \
-#   [ADMIN_EMAIL=you@x.com ADMIN_PASSWORD='StrongPass!'] \
 #   bash scripts/install.sh
+#
+# The DB is created using MySQL root, auto-detected in this order:
+#   MYSQL_ROOT_PASSWORD=...  →  /etc/cyberpanel/mysqlPassword  →  root unix_socket.
+# If none work, it prints exactly what to do and everything else still runs.
 #
 # Everything runs as the CyberPanel SITE USER (never leaves root-owned files).
 # All variables can be overridden from the environment.
@@ -71,7 +81,7 @@ if [ ! -f "$APP/.env" ]; then
 fi
 grep -q '^APP_KEY=base64:' "$APP/.env" || { echo "▸ Generating app key…"; artisan key:generate --force; }
 
-# Apply DB creds if provided (idempotent, in-place).
+# Read/write .env values in place (idempotent).
 set_env() { # set_env KEY VALUE
   local k="$1" v="$2"
   if grep -q "^${k}=" "$APP/.env"; then
@@ -80,9 +90,72 @@ set_env() { # set_env KEY VALUE
     echo "${k}=${v}" | as_user tee -a "$APP/.env" >/dev/null
   fi
 }
-[ -n "${DB_DATABASE:-}" ] && set_env DB_CONNECTION mysql && set_env DB_HOST "${DB_HOST:-127.0.0.1}" \
-  && set_env DB_PORT "${DB_PORT:-3306}" && set_env DB_DATABASE "$DB_DATABASE" \
-  && set_env DB_USERNAME "${DB_USERNAME:-}" && set_env DB_PASSWORD "${DB_PASSWORD:-}"
+env_get() { grep "^$1=" "$APP/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/^"//;s/"$//'; }
+
+# ── 3b. Database — create it automatically (like `wp db create`) ─────────────
+# Zero-touch: if DB creds aren't given, reuse what's already in .env, else derive
+# safe names from the domain and generate a strong password. Then create the
+# database + user if they don't exist. No manual MySQL step, no phpMyAdmin.
+SANITIZED="$(echo "$DOMAIN" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '_' | sed 's/_\{1,\}/_/g;s/^_//;s/_$//')"
+DB_HOST="${DB_HOST:-$(env_get DB_HOST)}"; DB_HOST="${DB_HOST:-127.0.0.1}"
+DB_PORT="${DB_PORT:-$(env_get DB_PORT)}"; DB_PORT="${DB_PORT:-3306}"
+DB_DATABASE="${DB_DATABASE:-$(env_get DB_DATABASE)}"; DB_DATABASE="${DB_DATABASE:-blogkit_${SANITIZED}}"
+DB_USERNAME="${DB_USERNAME:-$(env_get DB_USERNAME)}"; DB_USERNAME="${DB_USERNAME:-bk_${SANITIZED}}"
+DB_PASSWORD="${DB_PASSWORD:-$(env_get DB_PASSWORD)}"
+# MySQL identifier limits: database <= 64 chars, username <= 32.
+DB_DATABASE="$(echo "$DB_DATABASE" | cut -c1-64)"
+DB_USERNAME="$(echo "$DB_USERNAME" | cut -c1-32)"
+AUTO_DB_PW=0
+if [ -z "$DB_PASSWORD" ]; then
+  DB_PASSWORD="$(openssl rand -hex 16 2>/dev/null || echo "Bk$(date +%s)$RANDOM")"
+  AUTO_DB_PW=1
+fi
+
+# A MySQL admin client (root) for CREATE DATABASE/USER. CyberPanel keeps the root
+# password in /etc/cyberpanel/mysqlPassword; fresh MariaDB often allows root via
+# unix_socket. MYSQL_ROOT_PASSWORD=... overrides.
+mysql_admin() {
+  if [ -n "${MYSQL_ROOT_PASSWORD:-}" ]; then mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$@";
+  elif [ -f /etc/cyberpanel/mysqlPassword ]; then mysql -uroot -p"$(cat /etc/cyberpanel/mysqlPassword)" "$@";
+  else mysql -uroot "$@"; fi
+}
+
+if ! command -v mysql >/dev/null 2>&1; then
+  echo "▸ ⚠ mysql client not found — skipping DB auto-create. Create '$DB_DATABASE' manually, then re-run."
+elif mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" -e 'SELECT 1' "$DB_DATABASE" >/dev/null 2>&1; then
+  echo "▸ Database '$DB_DATABASE' already reachable as '$DB_USERNAME' — skipping create."
+elif mysql_admin -e 'SELECT 1' >/dev/null 2>&1; then
+  echo "▸ Creating database '$DB_DATABASE' and user '$DB_USERNAME'…"
+  # IF NOT EXISTS keeps it re-runnable; ALTER USER re-syncs the password so .env
+  # and MySQL never drift. Passwords are hex (no quoting hazards).
+  mysql_admin <<SQL || echo "  ⚠ DB creation reported an error — check MySQL and re-run."
+CREATE DATABASE IF NOT EXISTS \`$DB_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '$DB_USERNAME'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
+CREATE USER IF NOT EXISTS '$DB_USERNAME'@'127.0.0.1' IDENTIFIED BY '$DB_PASSWORD';
+ALTER USER '$DB_USERNAME'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
+ALTER USER '$DB_USERNAME'@'127.0.0.1' IDENTIFIED BY '$DB_PASSWORD';
+GRANT ALL PRIVILEGES ON \`$DB_DATABASE\`.* TO '$DB_USERNAME'@'localhost';
+GRANT ALL PRIVILEGES ON \`$DB_DATABASE\`.* TO '$DB_USERNAME'@'127.0.0.1';
+FLUSH PRIVILEGES;
+SQL
+else
+  echo "▸ ⚠ Could not reach MySQL as admin to auto-create the database."
+  echo "    Re-run with MYSQL_ROOT_PASSWORD='...' (or create '$DB_DATABASE' in CyberPanel first)."
+fi
+
+# Write the resolved DB creds into .env so Laravel connects.
+set_env DB_CONNECTION mysql
+set_env DB_HOST "$DB_HOST"
+set_env DB_PORT "$DB_PORT"
+set_env DB_DATABASE "$DB_DATABASE"
+set_env DB_USERNAME "$DB_USERNAME"
+set_env DB_PASSWORD "$DB_PASSWORD"
+
+# App URL + production posture (derive the URL from the domain if not given).
+set_env APP_URL "${APP_URL:-https://$DOMAIN}"
+set_env APP_ENV "${APP_ENV:-production}"
+set_env APP_DEBUG "${APP_DEBUG:-false}"
+
 # Production-safe defaults (advisories from preflight).
 set_env CACHE_STORE "${CACHE_STORE:-file}"
 set_env SESSION_DRIVER "${SESSION_DRIVER:-file}"
@@ -167,5 +240,8 @@ artisan blogkit:preflight || true
 echo
 echo "✅ Done. Reminders:"
 echo "   • Point the vHost docRoot at:  \$VH_ROOT/public_html/public"
-echo "   • If you just created .env, edit DB credentials and re-run this script."
+echo "   • Database '$DB_DATABASE' (user '$DB_USERNAME') is created and wired into .env."
+if [ "${AUTO_DB_PW:-0}" = "1" ]; then
+  echo "   • Generated DB password (saved in .env): $DB_PASSWORD"
+fi
 echo "   • Scheduler + queue worker now run every minute as $OWNER (backups, scheduled posts, network jobs)."
