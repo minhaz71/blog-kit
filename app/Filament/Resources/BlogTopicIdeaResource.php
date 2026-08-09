@@ -194,6 +194,12 @@ class BlogTopicIdeaResource extends Resource
                 ->native(false)
                 ->searchable()
                 ->placeholder(fn (Get $get): string => 'Provider default — '.LlmClient::defaultModel($get('provider') ?: 'anthropic')),
+            Select::make('review_passes')
+                ->label('Review → fix cycles')
+                ->options([1 => '1 (cheapest)', 2 => '2', 3 => '3 (recommended)', 4 => '4'])
+                ->default(3)
+                ->native(false)
+                ->helperText('How many times a reviewer critiques and the writer rewrites before publishing. More cycles = higher quality and higher cost.'),
             Select::make('publish_mode')
                 ->options(['draft' => 'Save as drafts (review first)', 'publish' => 'Publish immediately'])
                 ->default('draft')
@@ -246,6 +252,7 @@ class BlogTopicIdeaResource extends Resource
             'provider' => $data['provider'] ?? 'anthropic',
             'model' => $data['model'] ?? null,
             'reviewer_provider' => $data['provider'] ?? 'anthropic',
+            'review_passes' => (int) ($data['review_passes'] ?? 3),
             'blog_category_id' => $data['blog_category_id'] ?? null,
             'publish_mode' => $data['publish_mode'] ?? 'draft',
             'publish_interval_minutes' => $data['publish_interval_minutes'] ?? null,

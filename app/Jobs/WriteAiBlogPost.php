@@ -237,6 +237,9 @@ class WriteAiBlogPost implements ShouldQueue
             $path = (new \App\Services\Ai\ThumbnailService)->generateForPost($post, (string) $post->title, [
                 'custom' => $item->row['image_prompt'] ?? null,
                 'style' => $item->row['image_style'] ?? ($batch->image_style ?: null),
+                // Attribute the image cost to this batch/item in AI cost reports.
+                'batch_id' => $batch->id,
+                'item_id' => $item->id,
             ]);
 
             if ($path) {

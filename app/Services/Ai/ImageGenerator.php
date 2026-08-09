@@ -48,6 +48,29 @@ class ImageGenerator
         'gemini' => 'Google — Gemini Flash Image / Imagen 3',
     ];
 
+    /**
+     * Approximate USD cost PER IMAGE, by model — image APIs bill per image, not
+     * per token, so this is how we attribute thumbnail spend in AI cost reports.
+     * Estimates (list prices as of early 2026); tune in one place if they change.
+     */
+    public const IMAGE_PRICES = [
+        'fal-ai/flux/schnell' => 0.003,
+        'fal-ai/flux/dev' => 0.025,
+        'fal-ai/fast-sdxl' => 0.002,
+        'gpt-image-1' => 0.04,
+        'dall-e-3' => 0.04,
+        'gemini-2.5-flash-image' => 0.039,
+        'imagen-3.0-generate-002' => 0.04,
+    ];
+
+    /** Best-effort per-image price for the given (or configured) provider/model. */
+    public static function costFor(?string $provider = null, ?string $model = null): float
+    {
+        $model ??= self::model($provider);
+
+        return self::IMAGE_PRICES[$model] ?? 0.0;
+    }
+
     public static function provider(): string
     {
         $p = (string) setting('ai.image_provider', 'fal');

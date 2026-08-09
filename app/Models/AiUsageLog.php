@@ -112,4 +112,31 @@ class AiUsageLog extends Model
             'item_id' => $itemId,
         ]);
     }
+
+    /**
+     * Log a FLAT, non-token cost — e.g. image generation, which bills per image
+     * (not per token). Recorded with zero tokens and purpose 'image' so it shows
+     * up in the same AI cost reports and batch spend as the text usage.
+     */
+    public static function recordFlat(
+        string $provider,
+        string $model,
+        float $cost,
+        string $purpose = 'image',
+        ?int $batchId = null,
+        ?int $itemId = null,
+    ): self {
+        return self::create([
+            'provider' => $provider,
+            'model' => $model,
+            'purpose' => $purpose,
+            'input_tokens' => 0,
+            'output_tokens' => 0,
+            'cached_tokens' => 0,
+            'cache_write_tokens' => 0,
+            'cost' => round($cost, 6),
+            'batch_id' => $batchId,
+            'item_id' => $itemId,
+        ]);
+    }
 }

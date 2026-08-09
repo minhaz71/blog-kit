@@ -137,6 +137,19 @@ class ThumbnailService
             'featured_image_alt' => $post->featured_image_alt ?: Str::limit(trim($title), 120, ''),
         ]);
 
+        // Attribute the per-image cost so thumbnail spend appears in AI cost
+        // reports and each batch's total — not just the text tokens. Never fatal.
+        try {
+            $provider = $opts['provider'] ?? ImageGenerator::provider();
+            $model = $opts['model'] ?? ImageGenerator::model($provider);
+            \App\Models\AiUsageLog::recordFlat(
+                $provider, $model, ImageGenerator::costFor($provider, $model), 'image',
+                $opts['batch_id'] ?? null, $opts['item_id'] ?? null,
+            );
+        } catch (\Throwable) {
+            // cost tracking must never break thumbnail generation
+        }
+
         return $relative;
     }
 
