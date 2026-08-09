@@ -17,6 +17,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/posts', [\App\Http\Controllers\Api\NetworkController::class, 'storePost']);
         // Phase 4: list this site's posts for a hub to mirror.
         Route::get('/posts', [\App\Http\Controllers\Api\NetworkController::class, 'listPosts']);
+        // Internal-link catalog: this site's linkable pages (posts, categories,
+        // products, home) with real URLs + funnel identity, so a hub writes
+        // articles that link to THIS site's own content.
+        Route::get('/link-catalog', [\App\Http\Controllers\Api\NetworkController::class, 'linkCatalog']);
         // Phase 5: delete a post this hub manages ({id} = the hub's network_post_id).
         Route::delete('/posts/{id}', [\App\Http\Controllers\Api\NetworkController::class, 'deletePost'])
             ->where('id', '[0-9]+');

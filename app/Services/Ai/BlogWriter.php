@@ -368,9 +368,32 @@ JSON;
             .($learned !== '' ? "\n\n".$learned : '')
             .static::titleDirective($item->row)
             .static::keywordDirective($item->row)
+            .static::linkPlanBlock($item->row)
             ."\n\nTARGET LENGTH: ".static::lengthDirective($item->row)
             ."\n\nSTRUCTURE VARIATION for this article: {$directive}"
             ."\n\nReturn the JSON now.";
+    }
+
+    /**
+     * The funnel-aware internal-link plan for THIS article, computed by
+     * {@see InternalLinkPlanner} from the target site's own catalog. Each line
+     * is a specific page to link plus the SEO direction (up to pillar, down to a
+     * money page, lateral sibling…). Fires only when the writer job attached a
+     * plan; plain articles fall back to the generic catalog guidance above.
+     */
+    public static function linkPlanBlock(array $row): string
+    {
+        $plan = trim((string) ($row['link_plan'] ?? ''));
+
+        if ($plan === '') {
+            return '';
+        }
+
+        return "\n\nPRIORITY INTERNAL LINKS for THIS article (place every one that genuinely fits, "
+            ."inside sentences, with descriptive anchor text — these are the correct funnel-flow links for this page):\n"
+            .$plan
+            ."\nFollow the direction in [brackets]: link UP to the pillar for authority, DOWN-FUNNEL to money/decision pages "
+            .'to guide conversion, and laterally to true siblings. Never invent or alter these URLs.';
     }
 
     /**

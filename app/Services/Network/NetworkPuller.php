@@ -49,6 +49,11 @@ class NetworkPuller
                             'published_at' => $this->date($row['published_at'] ?? null),
                             'remote_updated_at' => $this->date($row['updated_at'] ?? null),
                             'category_name' => $row['category'] ?? null,
+                            // Funnel identity (present on Phase-2 spokes) so the
+                            // link planner can apply funnel rules to spoke content.
+                            'funnel_stage' => $row['funnel_stage'] ?? null,
+                            'content_role' => $row['content_role'] ?? null,
+                            'cluster' => $row['cluster'] ?? null,
                             'author_name' => $row['author'] ?? null,
                             'excerpt' => $row['excerpt'] ?? null,
                             'content_hash' => $row['content_hash'] ?? null,

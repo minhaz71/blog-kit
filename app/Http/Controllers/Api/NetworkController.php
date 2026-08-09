@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Post;
+use App\Models\Product;
 use App\Services\Network\NetworkPostIngestor;
 use App\Services\Network\NetworkPostPayload;
 use App\Support\Version;
@@ -56,9 +57,77 @@ class NetworkController extends Controller
                 // accept a future-dated post and publish it itself at the right
                 // time. Hubs use this to decide push-now vs defer-to-publish.
                 'posts.schedule' => true,
+                // This site can serve its full internal-link inventory (posts +
+                // categories + products + home, with identity) so a hub writes
+                // articles that link to THIS site's pages.
+                'link.catalog' => true,
                 'remote.update' => (bool) setting('network.allow_remote_update', false),
             ],
         ]);
+    }
+
+    /**
+     * Serve this site's complete internal-link catalog — every linkable page
+     * with its real absolute URL and funnel identity — so a hub can write an
+     * article FOR this site that links to THIS site's own content. Published,
+     * public pages only. Scope 'blog_only' omits commerce pages.
+     */
+    public function linkCatalog(Request $request): JsonResponse
+    {
+        $scope = $request->query('scope') === 'blog_only' ? 'blog_only' : 'ecommerce';
+        $data = [];
+
+        // Blog posts (with funnel identity).
+        foreach (Post::query()->where('status', 'published')
+            ->latest('published_at')->limit(120)->get(['title', 'slug', 'content_role', 'funnel_stage', 'cluster']) as $p) {
+            $data[] = [
+                'name' => (string) $p->title,
+                'url' => $p->url(),
+                'kind' => 'article',
+                'role' => $p->content_role ?: 'spoke',
+                'stage' => $p->funnel_stage ?: 'top',
+                'cluster' => $p->cluster,
+                'money' => false,
+            ];
+        }
+
+        // Blog categories.
+        foreach (\App\Models\PostCategory::query()->orderBy('name')->limit(40)->get(['name', 'slug']) as $c) {
+            $data[] = [
+                'name' => $c->name.' (blog category)',
+                'url' => route('blog.category', $c->slug),
+                'kind' => 'blog_category', 'role' => null, 'stage' => null, 'cluster' => null, 'money' => false,
+            ];
+        }
+
+        // Commerce pages (money targets) only when the store module is on here.
+        if ($scope !== 'blog_only' && ecommerce_enabled()) {
+            foreach (Product::query()->where('status', 'published')
+                ->orderByDesc('is_featured')->limit(80)->get(['name', 'slug']) as $p) {
+                $data[] = [
+                    'name' => $p->name,
+                    'url' => \App\Support\Permalinks::product($p->slug),
+                    'kind' => 'product', 'role' => null, 'stage' => 'bottom', 'cluster' => null, 'money' => true,
+                ];
+            }
+            foreach (\App\Models\Category::query()->where('is_active', true)
+                ->orderBy('sort_order')->limit(40)->get(['name', 'slug']) as $c) {
+                $data[] = [
+                    'name' => $c->name.' (product category)',
+                    'url' => \App\Support\Permalinks::category($c->slug),
+                    'kind' => 'product_category', 'role' => null, 'stage' => 'bottom', 'cluster' => null, 'money' => true,
+                ];
+            }
+        }
+
+        // Home.
+        $data[] = [
+            'name' => (string) setting('general.site_name', config('app.name')).' (home page)',
+            'url' => rtrim((string) config('app.url'), '/').'/',
+            'kind' => 'home', 'role' => null, 'stage' => null, 'cluster' => null, 'money' => false,
+        ];
+
+        return response()->json(['ok' => true, 'data' => $data, 'count' => count($data)]);
     }
 
     /**
@@ -124,6 +193,11 @@ class NetworkController extends Controller
                 'published_at' => $p->published_at?->toIso8601String(),
                 'updated_at' => $p->updated_at?->toIso8601String(),
                 'category' => $p->category?->name,
+                // Funnel identity — lets a hub apply internal-link rules
+                // (spoke→pillar, top/middle→money) to this site's own content.
+                'funnel_stage' => $p->funnel_stage,
+                'content_role' => $p->content_role,
+                'cluster' => $p->cluster,
                 'author' => $p->author?->name,
                 'excerpt' => Str::limit(strip_tags((string) $p->excerpt), 200),
                 // Lets a hub detect a spoke-side edit (divergence from what it

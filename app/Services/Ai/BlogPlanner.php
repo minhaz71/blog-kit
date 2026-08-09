@@ -426,9 +426,29 @@ SYS;
      * every Product/Post/Category/Page save — always fresh, zero extra
      * wiring, and every planner/writer/funnel consumer shares one entry.
      */
-    public function buildLinkCatalog(string $scope = 'ecommerce'): array
+    /**
+     * The site-scoped link catalog the writer/link-planner draws from.
+     *
+     * When $site is null the catalog is THIS install's own pages (hub/local).
+     * When a connected spoke is given, the catalog is that SPOKE's own pages
+     * with the spoke's real absolute URLs — pulled over the signed network API —
+     * so an article written for a spoke links to that spoke's content, never the
+     * hub's. Each entry is identity-enriched (kind/role/stage/cluster/money) so
+     * {@see InternalLinkPlanner} can apply funnel rules.
+     */
+    public function buildLinkCatalog(string $scope = 'ecommerce', ?\App\Models\ConnectedSite $site = null): array
     {
         $version = (int) \Illuminate\Support\Facades\Cache::get('pagecache.version', 1);
+
+        if ($site) {
+            // Spoke catalogs are cached briefly and refreshed by the puller; keep
+            // the TTL short so new spoke content becomes linkable quickly.
+            return \Illuminate\Support\Facades\Cache::remember(
+                "linkcatalog.site{$site->id}.v{$version}.{$scope}",
+                now()->addHours(6),
+                fn () => (new \App\Services\Network\NetworkLinkCatalogPuller)->catalog($site, $scope),
+            );
+        }
 
         return \Illuminate\Support\Facades\Cache::remember(
             "linkcatalog.v{$version}.{$scope}",
@@ -446,25 +466,45 @@ SYS;
                 ->concat(
                     Product::query()->where('status', 'published')
                         ->orderByDesc('is_featured')->limit(60)->get(['name', 'slug'])
-                        ->map(fn (Product $p) => ['name' => $p->name, 'url' => \App\Support\Permalinks::product($p->slug)])
+                        ->map(fn (Product $p) => [
+                            'name' => $p->name, 'url' => \App\Support\Permalinks::product($p->slug),
+                            'kind' => 'product', 'role' => null, 'stage' => 'bottom', 'cluster' => null, 'money' => true,
+                        ])
                 )
                 ->concat(
                     \App\Models\Category::query()->where('is_active', true)
                         ->orderBy('sort_order')->limit(20)->get(['name', 'slug'])
-                        ->map(fn ($c) => ['name' => $c->name.' (product category)', 'url' => \App\Support\Permalinks::category($c->slug)])
+                        ->map(fn ($c) => [
+                            'name' => $c->name.' (product category)', 'url' => \App\Support\Permalinks::category($c->slug),
+                            'kind' => 'product_category', 'role' => null, 'stage' => 'bottom', 'cluster' => null, 'money' => true,
+                        ])
                 )
-                ->push(['name' => (string) setting('general.site_name', config('app.name')).' (home page)', 'url' => url('/')]);
+                ->push([
+                    'name' => (string) setting('general.site_name', config('app.name')).' (home page)', 'url' => url('/'),
+                    'kind' => 'home', 'role' => null, 'stage' => null, 'cluster' => null, 'money' => false,
+                ]);
         }
 
         return $catalog
             ->concat(
                 Post::query()->where('status', 'published')
-                    ->latest('published_at')->limit(40)->get(['title', 'slug'])
-                    ->map(fn (Post $p) => ['name' => $p->title, 'url' => route('blog.show', $p->slug)])
+                    ->latest('published_at')->limit(60)
+                    ->get(['title', 'slug', 'content_role', 'funnel_stage', 'cluster'])
+                    ->map(fn (Post $p) => [
+                        'name' => $p->title, 'url' => route('blog.show', $p->slug),
+                        'kind' => 'article',
+                        'role' => $p->content_role ?: 'spoke',
+                        'stage' => $p->funnel_stage ?: 'top',
+                        'cluster' => $p->cluster,
+                        'money' => false,
+                    ])
             )
             ->concat(
                 \App\Models\PostCategory::query()->orderBy('name')->limit(20)->get(['name', 'slug'])
-                    ->map(fn ($c) => ['name' => $c->name.' (blog category)', 'url' => route('blog.category', $c->slug)])
+                    ->map(fn ($c) => [
+                        'name' => $c->name.' (blog category)', 'url' => route('blog.category', $c->slug),
+                        'kind' => 'blog_category', 'role' => null, 'stage' => null, 'cluster' => null, 'money' => false,
+                    ])
             )
             ->values()
             ->all();

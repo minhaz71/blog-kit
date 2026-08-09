@@ -64,6 +64,13 @@ class WriteAiBlogPost implements ShouldQueue
 
         $title = (string) ($item->row['name'] ?? "article #{$item->id}");
 
+        // Resolve the internal-link catalog for the SITE this article is written
+        // for — a connected spoke's own pages (real URLs) when it targets one,
+        // else this install's pages — and compute the funnel-flow link plan.
+        // Overriding batch->link_catalog in memory (not saved) points the writer,
+        // reviewer, gate and publisher at the right site's links for this item.
+        $this->applyLinkPlan($item, $batch);
+
         try {
             AiActivityLog::write($batch->id, $item->id, 'write', "✍️ Writing article \"{$title}\" via {$batch->provider}…");
 
@@ -142,6 +149,63 @@ class WriteAiBlogPost implements ShouldQueue
 
         $this->markFailed($item, 'Job was killed (timeout or fatal error): '.($e?->getMessage() ?? 'unknown'));
         $this->maybeFinalize($item->batch);
+    }
+
+    /**
+     * Point this item's internal linking at the correct site and wire it to the
+     * funnel rules:
+     *   1. Resolve the target site from the item's `site_ids` (a spoke id, or
+     *      local). Build that site's own link catalog — a spoke's real URLs come
+     *      over the signed network API, never the hub's localhost URLs.
+     *   2. Override the batch's link_catalog IN MEMORY so the writer, reviewer,
+     *      quality gate and publisher all validate against THIS site's pages.
+     *   3. Run the InternalLinkPlanner over the article's identity (role/stage/
+     *      cluster) to pick the exact link targets and a per-article brief the
+     *      writer follows (spoke→pillar, top/middle→money, etc.).
+     * Never fatal — on any hiccup the write proceeds with whatever catalog it has.
+     */
+    protected function applyLinkPlan(AiImportItem $item, \App\Models\AiImportBatch $batch): void
+    {
+        try {
+            $siteToken = $item->row['site_ids'] ?? 'local';
+            $site = null;
+            if ($siteToken !== 'local' && $siteToken !== '' && (int) $siteToken > 0) {
+                $site = \App\Models\ConnectedSite::find((int) $siteToken);
+            }
+
+            $scope = $batch->link_scope ?: (ecommerce_enabled() ? 'ecommerce' : 'blog_only');
+
+            // Local batches already have a baked catalog; only rebuild it when a
+            // spoke is targeted (its pages, its URLs).
+            $catalog = $site
+                ? (new \App\Services\Ai\BlogPlanner)->buildLinkCatalog($scope, $site)
+                : (array) $batch->link_catalog;
+
+            if ($catalog === []) {
+                return;
+            }
+
+            // In-memory override — NOT persisted (a batch may mix sites).
+            $batch->link_catalog = $catalog;
+
+            $plan = (new \App\Services\Ai\InternalLinkPlanner)->plan([
+                'role' => $item->row['role'] ?? 'spoke',
+                'stage' => $item->row['funnel_stage'] ?? 'top',
+                'cluster' => $item->row['cluster'] ?? null,
+                'primary_keyword' => $item->row['primary_keyword'] ?? null,
+                'url' => null, // brand-new article — nothing to exclude yet
+            ], $catalog);
+
+            if ($plan['targets'] !== []) {
+                $row = $item->row;
+                $row['required_links'] = implode(', ', array_column($plan['targets'], 'url'));
+                $row['link_plan'] = $plan['brief'];
+                $item->row = $row; // in-memory; the writer reads $item->row
+            }
+        } catch (\Throwable $e) {
+            AiActivityLog::write($batch->id, $item->id, 'write',
+                '🔗 Link planning skipped ('.mb_substr($e->getMessage(), 0, 140).') — writing with the default catalog.', 'warning');
+        }
     }
 
     /**

@@ -287,7 +287,7 @@ SYS;
         $commerce = ecommerce_enabled();
         $scope = $commerce ? 'ecommerce' : 'blog_only';
 
-        $bofu = collect((new BlogPlanner)->buildLinkCatalog($scope))
+        $bofu = collect((new BlogPlanner)->buildLinkCatalog($scope, $this->targetSite($batch)))
             ->take(60)
             ->map(fn ($l) => $l['name'].' => '.$l['url'])
             ->implode("\n");
@@ -336,7 +336,7 @@ SYS;
         $ask = $needed + (int) ceil($needed * 0.25); // overshoot: the gates will cut
         $commerce = ecommerce_enabled();
 
-        $catalogUrls = collect((new BlogPlanner)->buildLinkCatalog($commerce ? 'ecommerce' : 'blog_only'))->pluck('url')->all();
+        $catalogUrls = collect((new BlogPlanner)->buildLinkCatalog($commerce ? 'ecommerce' : 'blog_only', $this->targetSite($batch)))->pluck('url')->all();
 
         if ($commerce) {
             $system = <<<'SYS'
@@ -453,7 +453,8 @@ SYS;
         // routinely returns in a slightly different shape ("/terea-amber"
         // vs "https://site/terea-amber/") instead of discarding them.
         $catalogByPath = [];
-        foreach (collect((new BlogPlanner)->buildLinkCatalog(ecommerce_enabled() ? 'ecommerce' : 'blog_only'))->pluck('url') as $url) {
+        $gateSite = $batch ? $this->targetSite($batch) : null;
+        foreach (collect((new BlogPlanner)->buildLinkCatalog(ecommerce_enabled() ? 'ecommerce' : 'blog_only', $gateSite))->pluck('url') as $url) {
             $catalogByPath[$this->normalizeUrlPath((string) $url)] = (string) $url;
         }
 
@@ -602,6 +603,18 @@ SYS;
         $ids = array_values(array_filter(array_map('intval', (array) $batch->network_site_ids)));
 
         return $ids[0] ?? null;
+    }
+
+    /**
+     * The target spoke MODEL for this run (or null = this site). Used so the
+     * link catalog offered to the planner is the target site's own pages —
+     * ideas link to that site, not the hub.
+     */
+    protected function targetSite(AiImportBatch $batch): ?\App\Models\ConnectedSite
+    {
+        $id = $this->targetSiteId($batch);
+
+        return $id ? \App\Models\ConnectedSite::find($id) : null;
     }
 
     /**
