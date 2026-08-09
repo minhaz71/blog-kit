@@ -226,6 +226,17 @@ class BlogTopicIdeaResource extends Resource
     {
         $brief = AiImportBatch::DEFAULT_STORE_BRIEF;
 
+        // Which sites does THIS batch target, as a whole? Each idea was
+        // researched for one site (its spoke `site_id`, or local). Aggregate the
+        // distinct set onto the batch so the "Target" column and Live monitor
+        // show the real destination(s) — e.g. "puff" — instead of defaulting to
+        // "This site". The per-item row['site_ids'] still drives actual routing.
+        $batchTargets = $ideas
+            ->map(fn ($idea) => $idea->site_id ? (int) $idea->site_id : \App\Services\Network\NetworkTargets::LOCAL)
+            ->unique()
+            ->values()
+            ->all();
+
         $batch = AiImportBatch::create([
             'kind' => 'blog',
             'csv_path' => '',
@@ -240,6 +251,7 @@ class BlogTopicIdeaResource extends Resource
             'publish_interval_minutes' => $data['publish_interval_minutes'] ?? null,
             'generate_images' => $data['generate_images'] ?? true,
             'image_style' => $data['image_style'] ?? null,
+            'network_site_ids' => $batchTargets,
             'link_scope' => 'ecommerce',
             'funnel_rounds' => (int) $ideas->max('verified_rounds'), // marks it a funnel batch
             'status' => 'processing',

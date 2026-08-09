@@ -68,6 +68,24 @@ class MonitorAiImportBatch extends Page
         return 'Live monitor — '.$this->record->name;
     }
 
+    /**
+     * Breadcrumbs are derived from this page's $resource (the ecommerce product
+     * importer, whose index 403s when the store is off). For a BLOG batch, point
+     * the trail back to the AI Blog Batches list so a blog-only admin never
+     * bounces into that forbidden ecommerce page.
+     */
+    public function getBreadcrumbs(): array
+    {
+        if (in_array($this->record->kind, self::BLOG_KINDS, true)) {
+            return [
+                \App\Filament\Resources\AiBlogBatchResource::getUrl() => 'AI blog batches',
+                'Live monitor',
+            ];
+        }
+
+        return parent::getBreadcrumbs();
+    }
+
     /** Show where this batch's articles are headed (this site vs a connected spoke). */
     public function getSubheading(): ?string
     {
