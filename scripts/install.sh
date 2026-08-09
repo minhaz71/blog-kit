@@ -226,6 +226,29 @@ QUEUE_LINE="* * * * * cd $APP && sudo -u $OWNER $PHP artisan queue:work --stop-w
 ( crontab -l 2>/dev/null | grep -vF "$APP/artisan schedule:run" | grep -vF "$APP/artisan queue:work" | grep -vF "artisan schedule:run" | grep -vF "artisan queue:work"; \
   echo "$SCHED_LINE"; echo "$QUEUE_LINE" ) | crontab -
 
+# ── 9b. Web server docRoot — point the vHost at Laravel's public/ (auto) ─────
+# CyberPanel/OpenLiteSpeed serves $VH_ROOT/public_html by default, but a Laravel
+# app's front controller lives in public_html/public. Point the vHost there
+# automatically (idempotent + backed up) so there is NO manual vHost editing in
+# the panel — the WordPress-simple experience, on BlogKit's own stack.
+# Opt out with SKIP_VHOST=1 if you manage the vHost yourself.
+if [ "${SKIP_VHOST:-0}" != "1" ]; then
+  VHOST_CONF="${VHOST_CONF:-/usr/local/lsws/conf/vhosts/$DOMAIN/vhost.conf}"
+  if [ ! -f "$VHOST_CONF" ]; then
+    echo "▸ vHost conf not found ($VHOST_CONF) — set the site docRoot to public_html/public in CyberPanel."
+  elif grep -qE "^[[:space:]]*docRoot[[:space:]]+${APP}/public([[:space:]]|$)" "$VHOST_CONF"; then
+    echo "▸ vHost docRoot already points at public/ — no change."
+  elif grep -qE "^[[:space:]]*docRoot[[:space:]]" "$VHOST_CONF"; then
+    echo "▸ Pointing vHost docRoot at $APP/public…"
+    cp -a "$VHOST_CONF" "$VHOST_CONF.bak.$(date +%s)"
+    # Replace whatever docRoot currently is with the app's public/ dir.
+    sed -i -E "s#^([[:space:]]*docRoot[[:space:]]+).*#\1${APP}/public#" "$VHOST_CONF"
+    NEED_LSWS_RESTART=1
+  else
+    echo "▸ ⚠ No docRoot line in $VHOST_CONF — set docRoot to $APP/public in CyberPanel manually."
+  fi
+fi
+
 # ── 10. Flush caches (app + LiteSpeed edge) ──────────────────────────────────
 echo "▸ Clearing caches…"
 artisan optimize:clear
@@ -239,7 +262,11 @@ artisan blogkit:preflight || true
 
 echo
 echo "✅ Done. Reminders:"
-echo "   • Point the vHost docRoot at:  \$VH_ROOT/public_html/public"
+if [ "${SKIP_VHOST:-0}" = "1" ]; then
+  echo "   • SKIP_VHOST set — point the vHost docRoot at $APP/public yourself."
+else
+  echo "   • vHost docRoot auto-pointed at $APP/public (a .bak was saved next to vhost.conf)."
+fi
 echo "   • Database '$DB_DATABASE' (user '$DB_USERNAME') is created and wired into .env."
 if [ "${AUTO_DB_PW:-0}" = "1" ]; then
   echo "   • Generated DB password (saved in .env): $DB_PASSWORD"
