@@ -32,7 +32,7 @@ APP="${APP:-/home/$DOMAIN/public_html}"
 OWNER="$(stat -c '%U' "/home/$DOMAIN" 2>/dev/null || echo '')"
 GROUP="$(stat -c '%G' "/home/$DOMAIN" 2>/dev/null || echo "$OWNER")"
 [ -z "$OWNER" ] && { echo "ERROR: could not resolve the site user for /home/$DOMAIN"; exit 1; }
-USER_HOME="$(getent passwd "$OWNER" | cut -d: -f6)"; [ -d "$USER_HOME" ] || USER_HOME="$APP"
+USER_HOME="$(getent passwd "$OWNER" | cut -d: -f6 || true)"; [ -d "$USER_HOME" ] || USER_HOME="$APP"
 as_user() { sudo -u "$OWNER" env HOME="$USER_HOME" "$@"; }
 
 echo "▸ Provisioning $DOMAIN  (app: $APP, user: $OWNER, repo: $REPO@$BRANCH)"

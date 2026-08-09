@@ -36,6 +36,8 @@
 # No other site's files, database, cron, or cached data are affected.
 
 set -euo pipefail
+# Report where we stop instead of exiting silently (these installs run headless).
+trap 'echo "✖ install.sh failed at line $LINENO. Fix the cause above and re-run — it is idempotent." >&2' ERR
 
 # ── Configuration (override via env) ──────────────────────────────────────────
 DOMAIN="${DOMAIN:-}"
@@ -59,7 +61,7 @@ GROUP="${GROUP:-$(stat -c '%G' "/home/$DOMAIN" 2>/dev/null || echo "$OWNER")}"
 # The site user's REAL home (CyberPanel uses /home/<domain>, not /home/<user>).
 # Fall back to a writable dir inside the app so npm/git caches never hit an
 # unwritable path.
-USER_HOME="$(getent passwd "$OWNER" 2>/dev/null | cut -d: -f6)"
+USER_HOME="$(getent passwd "$OWNER" 2>/dev/null | cut -d: -f6 || true)"
 if [ -z "$USER_HOME" ] || [ ! -d "$USER_HOME" ]; then
   USER_HOME="$APP/storage/app/.deploy-home"
 fi
@@ -95,7 +97,11 @@ set_env() { # set_env KEY VALUE
     echo "${k}=${v}" | as_user tee -a "$APP/.env" >/dev/null
   fi
 }
-env_get() { grep "^$1=" "$APP/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/^"//;s/"$//'; }
+# Read a value from .env. MUST NOT fail the script: modern .env.example comments
+# out the DB_* lines, so grep finds nothing → under `set -o pipefail` the pipe
+# returns non-zero → `X=${X:-$(env_get …)}` would abort with no message. The
+# trailing `|| true` guarantees success with empty output on a miss.
+env_get() { { grep "^$1=" "$APP/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/^"//;s/"$//'; } || true; }
 
 # App key — generate with openssl (no artisan/vendor needed yet) if absent.
 grep -q '^APP_KEY=base64:' "$APP/.env" || { echo "▸ Generating app key…"; set_env APP_KEY "base64:$(openssl rand -base64 32)"; }
@@ -206,7 +212,7 @@ FRESH=0
 if [ "${SEED:-auto}" = "auto" ]; then
   # Seed when there are no users yet. Ask MySQL directly (no app boot before the
   # tables exist): a missing users table errors → treated as fresh.
-  USERS="$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" -N -e 'SELECT COUNT(*) FROM users' "$DB_DATABASE" 2>/dev/null | tr -dc '0-9')"
+  USERS="$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" -N -e 'SELECT COUNT(*) FROM users' "$DB_DATABASE" 2>/dev/null | tr -dc '0-9' || true)"
   if [ -z "$USERS" ] || [ "$USERS" = "0" ]; then FRESH=1; fi
 elif [ "${SEED:-}" = "1" ]; then
   FRESH=1
