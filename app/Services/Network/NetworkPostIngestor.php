@@ -30,6 +30,11 @@ class NetworkPostIngestor
             // Store any bundled in-body images locally and rewrite their URLs
             // BEFORE sanitizing, so the spoke serves them from its own disk.
             $rawContent = $this->ingestInlineImages($hubKey, $data, (string) ($data['content'] ?? ''));
+            // Safety net: rewrite any leftover HUB base URL in the body to THIS
+            // site's own URL, so a link never points back at the hub/localhost
+            // (image srcs were already localized to relative paths above, so this
+            // only affects anchor links to pages/categories).
+            $rawContent = $this->rewriteHubLinks($data, $rawContent);
             $body = (new BlogPublisher)->enforceClassWhitelist($rawContent);
             $excerpt = trim((string) ($data['excerpt'] ?? ''));
             $words = str_word_count(strip_tags($body));
@@ -172,6 +177,22 @@ class NetworkPostIngestor
                 ->whereNull('pillar_post_id')
                 ->update(['pillar_post_id' => $post->id]);
         }
+    }
+
+    /**
+     * Rewrite any absolute HUB URL left in the body to THIS site's own base URL,
+     * so an internal link never points at the hub (or the hub's localhost). The
+     * hub sends its base as `origin_url`; we also cover common dev hosts as a
+     * belt-and-braces measure. Anchor links to hub pages/categories become links
+     * to the same path on this site.
+     */
+    protected function rewriteHubLinks(array $data, string $content): string
+    {
+        return NetworkPostPayload::rewriteHubLinks(
+            $content,
+            rtrim((string) config('app.url'), '/'),
+            $data['origin_url'] ?? null,
+        );
     }
 
     /**

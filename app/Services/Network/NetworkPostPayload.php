@@ -37,6 +37,9 @@ class NetworkPostPayload
         return [
             // Stable identity for idempotent upserts on the spoke.
             'network_post_id' => $post->id,
+            // This hub's base URL, so the spoke can rewrite any leftover hub link
+            // in the body to its own domain (never link back to the hub/localhost).
+            'origin_url' => rtrim((string) config('app.url'), '/'),
             'title' => (string) $post->title,
             'slug' => (string) $post->slug,
             'excerpt' => (string) $post->excerpt,
@@ -86,6 +89,40 @@ class NetworkPostPayload
             ] : null,
             'faqs' => $faqs,
         ];
+    }
+
+    /**
+     * Rewrite anchor hrefs that point at the HUB (or a localhost dev host) to the
+     * given target base URL, so an internal link never points back at the hub /
+     * localhost from a spoke. ONLY href attributes are touched — <img src> is
+     * left alone so the spoke can still localize bundled images by their
+     * original hub src. Used hub-side at push time (target = spoke URL) and
+     * spoke-side at ingest (target = the spoke's own URL) as a belt-and-braces.
+     */
+    public static function rewriteHubLinks(string $content, string $targetBase, ?string $hubOrigin = null): string
+    {
+        $target = rtrim($targetBase, '/');
+        if ($target === '' || ! str_contains($content, 'href')) {
+            return $content;
+        }
+
+        $origins = array_values(array_unique(array_filter([
+            rtrim((string) $hubOrigin, '/'),
+            rtrim((string) config('app.url'), '/'),
+            'http://127.0.0.1:8000', 'https://127.0.0.1:8000',
+            'http://localhost:8000', 'http://127.0.0.1', 'http://localhost',
+        ])));
+
+        return (string) preg_replace_callback('/href\s*=\s*"([^"]*)"/i', function ($m) use ($origins, $target) {
+            $url = $m[1];
+            foreach ($origins as $o) {
+                if ($o !== '' && $o !== $target) {
+                    $url = str_replace($o, $target, $url);
+                }
+            }
+
+            return 'href="'.$url.'"';
+        }, $content);
     }
 
     /**

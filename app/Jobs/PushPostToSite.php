@@ -39,6 +39,10 @@ class PushPostToSite implements ShouldQueue
         }
 
         $payload = NetworkPostPayload::for($post);
+        // Never ship a link back to the hub/localhost: rewrite our own base URL
+        // (and dev hosts) to THIS spoke's URL in the body. Done here (hub side)
+        // so it works even if the spoke runs an older version.
+        $payload['content'] = NetworkPostPayload::rewriteHubLinks((string) $payload['content'], (string) $site->base_url);
         // Store the canonical content hash (same fn the spoke reports on pull)
         // so conflict detection compares apples to apples.
         $hash = NetworkPostPayload::contentHash($post);
