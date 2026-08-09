@@ -76,21 +76,15 @@ cd "$APP"
 # ── 1. Git safe.directory (fixes "dubious ownership" for pulls/updates) ───────
 as_user git config --global --add safe.directory "$APP" 2>/dev/null || true
 
-# ── 2. Composer deps under PHP 8.3 (never the system default 7.4) ─────────────
-if ! command -v composer >/dev/null 2>&1; then
-  echo "▸ Installing Composer under PHP 8.3…"
-  "$PHP" -r "copy('https://getcomposer.org/installer','/tmp/ci.php');"
-  "$PHP" /tmp/ci.php --install-dir=/usr/local/bin --filename=composer
-fi
-echo "▸ Installing PHP dependencies…"
-as_user env COMPOSER_ALLOW_SUPERUSER=1 "$PHP" "$(command -v composer)" install --no-dev --optimize-autoloader --no-interaction
-
-# ── 3. .env + app key ─────────────────────────────────────────────────────────
+# ── 2. .env FIRST ─────────────────────────────────────────────────────────────
+# Composer's post-install `package:discover` BOOTS the app. Without a valid .env
+# it falls back to the sqlite default and dies on a fresh box (no database.sqlite).
+# So .env + APP_KEY + the database must all exist BEFORE Composer runs. We create
+# the key with openssl here (no vendor/ needed yet).
 if [ ! -f "$APP/.env" ]; then
-  echo "▸ Creating .env from .env.example — EDIT DB credentials after this run."
+  echo "▸ Creating .env from .env.example…"
   as_user cp "$APP/.env.example" "$APP/.env"
 fi
-grep -q '^APP_KEY=base64:' "$APP/.env" || { echo "▸ Generating app key…"; artisan key:generate --force; }
 
 # Read/write .env values in place (idempotent).
 set_env() { # set_env KEY VALUE
@@ -102,6 +96,9 @@ set_env() { # set_env KEY VALUE
   fi
 }
 env_get() { grep "^$1=" "$APP/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/^"//;s/"$//'; }
+
+# App key — generate with openssl (no artisan/vendor needed yet) if absent.
+grep -q '^APP_KEY=base64:' "$APP/.env" || { echo "▸ Generating app key…"; set_env APP_KEY "base64:$(openssl rand -base64 32)"; }
 
 # ── 3b. Database — create it automatically (like `wp db create`) ─────────────
 # Zero-touch: if DB creds aren't given, reuse what's already in .env, else derive
@@ -182,6 +179,17 @@ set_env CACHE_STORE "${CACHE_STORE:-file}"
 set_env SESSION_DRIVER "${SESSION_DRIVER:-file}"
 set_env LOG_LEVEL "${LOG_LEVEL:-error}"
 
+# ── 3c. Composer deps under PHP 8.3 — .env + DB now exist, so the app can boot ─
+# --no-scripts: skip package:discover DURING install (it boots the app and would
+# fail before migrations create the tables). We run it explicitly AFTER migrate.
+if ! command -v composer >/dev/null 2>&1; then
+  echo "▸ Installing Composer under PHP 8.3…"
+  "$PHP" -r "copy('https://getcomposer.org/installer','/tmp/ci.php');"
+  "$PHP" /tmp/ci.php --install-dir=/usr/local/bin --filename=composer
+fi
+echo "▸ Installing PHP dependencies…"
+as_user env COMPOSER_ALLOW_SUPERUSER=1 "$PHP" "$(command -v composer)" install --no-dev --optimize-autoloader --no-interaction --no-scripts
+
 # ── 4. Runtime storage dirs (git doesn't store empty dirs → 500 if missing) ──
 echo "▸ Ensuring storage directories…"
 as_user mkdir -p \
@@ -196,9 +204,10 @@ as_user mkdir -p \
 echo "▸ Running migrations (additive; destructive ones are blocked)…"
 FRESH=0
 if [ "${SEED:-auto}" = "auto" ]; then
-  # Seed when there are no users yet (fresh install).
-  USERS="$(artisan tinker --execute='echo \Illuminate\Support\Facades\Schema::hasTable("users") ? \App\Models\User::count() : 0;' 2>/dev/null | tr -dc '0-9' || echo 0)"
-  [ "${USERS:-0}" = "0" ] && FRESH=1
+  # Seed when there are no users yet. Ask MySQL directly (no app boot before the
+  # tables exist): a missing users table errors → treated as fresh.
+  USERS="$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" -N -e 'SELECT COUNT(*) FROM users' "$DB_DATABASE" 2>/dev/null | tr -dc '0-9')"
+  if [ -z "$USERS" ] || [ "$USERS" = "0" ]; then FRESH=1; fi
 elif [ "${SEED:-}" = "1" ]; then
   FRESH=1
 fi
@@ -207,6 +216,12 @@ if [ "$FRESH" = "1" ]; then
 else
   artisan migrate --force
 fi
+
+# Package discovery was skipped during composer (--no-scripts) so it couldn't run
+# before the tables existed. Run it now that the DB is migrated.
+echo "▸ Discovering packages…"
+artisan package:discover --ansi 2>/dev/null || artisan package:discover || true
+
 artisan storage:link 2>/dev/null || true
 
 # Content pipeline backfills (idempotent no-ops once done).
