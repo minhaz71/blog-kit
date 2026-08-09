@@ -81,15 +81,36 @@ class ListConnectedSites extends ListRecords
                 ->modalHeading('Update status per connected site')
                 ->modalContent(function () {
                     $rows = ConnectedSite::query()->active()->get()->map(function ($site) {
+                        $client = new NetworkClient(timeout: 15);
+
+                        // First confirm the site is reachable at all (and get its
+                        // version), so we can tell "older version" apart from
+                        // "truly down".
                         try {
-                            $res = (new NetworkClient(timeout: 15))->request($site, 'GET', 'update-status');
+                            $caps = $client->request($site, 'GET', 'capabilities');
+                            $version = $caps['version'] ?? '?';
+                        } catch (\Throwable $e) {
+                            return "<strong>{$site->name}</strong>: ❌ unreachable — ".e(mb_substr($e->getMessage(), 0, 140));
+                        }
+
+                        // Reachable — now ask for the update status.
+                        try {
+                            $res = $client->request($site, 'GET', 'update-status');
                             $s = $res['status'] ?? [];
                             $state = $s['state'] ?? 'idle';
-                            $msg = $s['message'] ?? ($s['step'] ?? '—');
+                            $icon = match ($state) { 'success' => '✅', 'failed' => '⛔', 'running' => '⏳', default => '•' };
+                            $msg = $s['message'] ?? ($s['step'] ?? 'No update run yet.');
 
-                            return "<strong>{$site->name}</strong> (v".($res['version'] ?? '?')."): <em>{$state}</em> — ".e($msg);
+                            return "<strong>{$site->name}</strong> (v{$version}): {$icon} <em>{$state}</em> — ".e($msg);
                         } catch (\Throwable $e) {
-                            return "<strong>{$site->name}</strong>: unreachable — ".e(mb_substr($e->getMessage(), 0, 120));
+                            // Reachable but no status endpoint → it's on an older
+                            // version. Updating it once deploys status reporting.
+                            if (str_contains($e->getMessage(), '404')) {
+                                return "<strong>{$site->name}</strong> (v{$version}): ⚠️ on an older version — no status endpoint yet. "
+                                    .'Click <strong>“Update all sites”</strong> to update it; status reporting appears afterwards.';
+                            }
+
+                            return "<strong>{$site->name}</strong> (v{$version}): status check failed — ".e(mb_substr($e->getMessage(), 0, 120));
                         }
                     })->implode('<br><br>');
 
