@@ -131,10 +131,26 @@ class BlogkitUpdate extends Command
             $this->rebuildAssets();
             $this->step('Rebuilding caches…');
             Version::forget();
+            // CRITICAL: rebuild caches in FRESH php subprocesses, not in this
+            // long-lived process. This process loaded the OLD route/config files
+            // into OPcache at boot, BEFORE `git pull` replaced them — so calling
+            // route:cache in-process can bake the PRE-UPDATE routes (new
+            // endpoints then 404). A new `php artisan` process reads the new
+            // files. Clear first so a stale cache is never left behind.
+            $php = PHP_BINARY ?: 'php';
+            $artisan = base_path('artisan');
+            $this->exec([$php, $artisan, 'optimize:clear']);
             foreach (['config:cache', 'route:cache', 'view:cache', 'event:cache'] as $c) {
-                Artisan::call($c);
+                $this->exec([$php, $artisan, $c]);
             }
-            Artisan::call('queue:restart');
+            $this->exec([$php, $artisan, 'queue:restart']);
+
+            // OpenLiteSpeed/LiteSpeed keep lsphp workers warm with OPcache; when
+            // the host sets opcache.validate_timestamps=0 the running workers
+            // won't see new code until the server reloads. Try a graceful reload
+            // (needs privileges; silently ignored if not permitted), and always
+            // leave a clear note so the owner can do it from CyberPanel/SSH.
+            $this->reloadWebServer();
         } catch (\Throwable $e) {
             $this->error('Update FAILED: '.$e->getMessage());
             \App\Support\UpdateStatus::appendLog('Update FAILED: '.$e->getMessage());
@@ -236,6 +252,36 @@ class BlogkitUpdate extends Command
         }
 
         $this->warn('Rollback complete — the site is on the previous version with its previous data.');
+    }
+
+    /**
+     * Best-effort graceful reload of the web server so warm PHP workers pick up
+     * the new code (essential on OpenLiteSpeed with opcache.validate_timestamps=0).
+     * Never fatal: most of these need root, which the site user lacks — so on
+     * failure we just tell the owner exactly what to run.
+     */
+    protected function reloadWebServer(): void
+    {
+        $tried = false;
+
+        // OpenLiteSpeed / LiteSpeed (CyberPanel): graceful restart.
+        if (is_executable('/usr/local/lsws/bin/lswsctrl')) {
+            $tried = true;
+            try {
+                $this->exec(['/usr/local/lsws/bin/lswsctrl', 'restart'], 60);
+                $this->line('  Reloaded LiteSpeed — new routes are live.');
+
+                return;
+            } catch (\Throwable) {
+                // no privileges — fall through to the instruction
+            }
+        }
+
+        if ($tried || is_dir('/usr/local/lsws')) {
+            $note = 'OpenLiteSpeed detected: if a new page/route 404s, reload the web server as root — `systemctl restart lsws` (or restart it from CyberPanel).';
+            $this->warn('  '.$note);
+            \App\Support\UpdateStatus::appendLog($note);
+        }
     }
 
     protected function step(string $message): void
