@@ -42,7 +42,7 @@
             <div class="min-w-0">
                 <h1 class="{{ $titleClass }} tracking-tight text-balance text-gray-900 {{ $fontClass }}">{{ $post->title }}</h1>
                 @if($hasHero)
-                    <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="mt-6 w-full rounded-2xl object-cover">
+                    <img width="1536" height="864" src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="mt-6 w-full rounded-2xl object-cover">
                 @endif
                 @include('blog.partials.body')
                 @include('blog.partials.endmatter')
@@ -55,7 +55,7 @@
 @case('heroFull')
     @if($hasHero)
         <div class="relative h-[52vh] min-h-[22rem] w-full overflow-hidden">
-            <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="absolute inset-0 h-full w-full object-cover">
+            <img width="1536" height="864" src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="absolute inset-0 h-full w-full object-cover">
             <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent"></div>
             <div class="absolute inset-x-0 bottom-0 text-white">
                 <div class="mx-auto {{ $maxW }} px-4 pb-10 sm:px-6">
@@ -92,7 +92,7 @@
     <article class="mx-auto {{ $maxW }} px-4 py-10 sm:px-6">
         <x-breadcrumbs :crumbs="$seo->breadcrumbs" />
         @if($hasHero)
-            <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="-mt-16 w-full rounded-2xl object-cover shadow-xl ring-1 ring-black/5">
+            <img width="1536" height="864" src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="-mt-16 w-full rounded-2xl object-cover shadow-xl ring-1 ring-black/5">
         @endif
         @if($tocInline)@include('blog.partials.toc')@endif
         @include('blog.partials.body')
@@ -111,7 +111,7 @@
                     <div class="mt-4">@include('blog.partials.meta', ['light' => true])</div>
                 </div>
                 @if($hasHero)
-                    <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="aspect-[4/3] w-full rounded-2xl object-cover shadow-xl">
+                    <img width="1536" height="864" src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" class="aspect-[4/3] w-full rounded-2xl object-cover shadow-xl">
                 @endif
             </div>
         </div>
@@ -137,7 +137,7 @@
                 @if($t['rules'] ?? false)<hr class="mt-5 border-gray-900/10">@endif
             </header>
             @if($hasHero)
-                <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" width="768" height="432" class="mt-6 w-full rounded-2xl object-cover">
+                <img width="1536" height="864" src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" width="768" height="432" class="mt-6 w-full rounded-2xl object-cover">
             @endif
             @if($tocInline)@include('blog.partials.toc')@endif
             @include('blog.partials.body')

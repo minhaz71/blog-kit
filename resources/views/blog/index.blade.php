@@ -73,7 +73,7 @@
                     <a href="{{ $feature->url() }}" class="group relative mb-6 flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-brand hover:shadow-lg lg:flex-row">
                         <div class="relative aspect-[16/9] overflow-hidden lg:aspect-auto lg:w-3/5">
                             @if($feature->featuredImageUrl())
-                                <img src="{{ $feature->featuredImageUrl() }}" alt="{{ $feature->featured_image_alt ?: $feature->title }}" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                                <img width="1536" height="864" src="{{ $feature->featuredImageUrl() }}" alt="{{ $feature->featured_image_alt ?: $feature->title }}" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
                             @else
                                 <div class="grad-brand flex h-full w-full items-center justify-center p-6">
                                     <span class="text-center text-lg font-bold leading-snug text-white/95 line-clamp-4">{{ $feature->title }}</span>
@@ -123,7 +123,7 @@
                         <a href="{{ $feature->url() }}" class="group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-brand hover:shadow-lg lg:col-span-2 lg:row-span-2">
                             <div class="relative aspect-[16/10] overflow-hidden lg:flex-1">
                                 @if($feature->featuredImageUrl())
-                                    <img src="{{ $feature->featuredImageUrl() }}" alt="{{ $feature->featured_image_alt ?: $feature->title }}" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                                    <img width="1536" height="864" src="{{ $feature->featuredImageUrl() }}" alt="{{ $feature->featured_image_alt ?: $feature->title }}" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
                                 @else
                                     <div class="grad-brand flex h-full min-h-64 w-full items-center justify-center p-6">
                                         <span class="text-center text-lg font-bold leading-snug text-white/95 line-clamp-4">{{ $feature->title }}</span>
@@ -148,7 +148,7 @@
                             <a href="{{ $post->url() }}" class="group flex gap-4 overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-brand hover:shadow-lg">
                                 <div class="relative aspect-square w-24 shrink-0 overflow-hidden rounded-xl sm:w-28">
                                     @if($post->featuredImageUrl())
-                                        <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                                        <img width="1536" height="864" src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
                                     @else
                                         <div class="grad-brand flex h-full w-full items-center justify-center p-2">
                                             <span class="text-center text-xs font-bold leading-tight text-white/95 line-clamp-3">{{ $post->title }}</span>
@@ -244,7 +244,7 @@
                                         <div class="mt-2 flex flex-col gap-4 sm:flex-row">
                                             <div class="relative aspect-[16/9] shrink-0 overflow-hidden rounded-xl sm:aspect-[4/3] sm:w-40">
                                                 @if($post->featuredImageUrl())
-                                                    <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                                                    <img width="1536" height="864" src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
                                                 @else
                                                     <div class="grad-brand flex h-full w-full items-center justify-center p-3">
                                                         <span class="text-center text-xs font-bold leading-tight text-white/95 line-clamp-3">{{ $post->title }}</span>

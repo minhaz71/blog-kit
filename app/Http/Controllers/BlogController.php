@@ -11,11 +11,17 @@ class BlogController extends Controller
 {
     public function index(SeoManager $seo)
     {
+        $page = max(1, (int) request('page', 1));
+
         return view('blog.index', [
             'posts' => Post::published()->with(['author', 'category'])->latest('published_at')->paginate(12),
             'categories' => $this->navCategories(),
             'heading' => 'Blog',
-            'seo' => $seo->forUtility('Blog', noindex: false),
+            'seo' => $seo->forUtility(
+                'Blog'.($page > 1 ? " — Page {$page}" : ''),
+                noindex: false,
+                canonical: $seo->paginatedCanonical($page),
+            ),
         ]);
     }
 
@@ -39,7 +45,11 @@ class BlogController extends Controller
             'subcategories' => $subcategories,
             'activeCategory' => $postCategory,
             'heading' => $postCategory->name,
-            'seo' => $seo->forUtility($postCategory->name.' — Blog', noindex: false),
+            'seo' => $seo->forUtility(
+                $postCategory->name.' — Blog'.(($p = max(1, (int) request('page', 1))) > 1 ? " — Page {$p}" : ''),
+                noindex: false,
+                canonical: $seo->paginatedCanonical($p),
+            ),
         ]);
     }
 

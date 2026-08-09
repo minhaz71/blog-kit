@@ -19,7 +19,7 @@
 <a href="{{ $post->url() }}" class="group flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-brand hover:shadow-lg">
     <div class="relative overflow-hidden {{ $natural ? '' : 'aspect-[16/9]' }}">
         @if($post->featuredImageUrl())
-            <img src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" loading="lazy" class="w-full object-cover transition duration-500 group-hover:scale-105 {{ $natural ? 'h-auto' : 'h-full' }}">
+            <img width="1536" height="864" src="{{ $post->featuredImageUrl() }}" alt="{{ $post->featured_image_alt ?: $post->title }}" loading="lazy" class="w-full object-cover transition duration-500 group-hover:scale-105 {{ $natural ? 'h-auto' : 'h-full' }}">
         @else
             <div class="grad-brand flex {{ $natural ? 'aspect-[4/3]' : 'h-full' }} w-full items-center justify-center p-5">
                 <span class="text-center font-bold leading-snug text-white/95 line-clamp-3">{{ $post->title }}</span>

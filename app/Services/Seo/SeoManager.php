@@ -294,17 +294,26 @@ class SeoManager
     }
 
     /** Generic payload for search/other utility pages (noindex by default). */
-    public function forUtility(string $title, bool $noindex = true, ?string $description = null): SeoData
+    public function forUtility(string $title, bool $noindex = true, ?string $description = null, ?string $canonical = null): SeoData
     {
         return new SeoData(
             title: $title,
             // Fall back to the store's default description so indexable
             // utility pages (e.g. the shop index) never ship an empty meta.
             description: $description ?: setting('seo.default_description'),
-            canonical: url()->current(),
+            // Default to the query-stripped current URL; a paginated listing
+            // passes its own ?page=N so page 2+ self-canonicalizes (never points
+            // at page 1, which would deindex the deeper pages).
+            canonical: $canonical ?: url()->current(),
             robots: $noindex ? 'noindex, follow' : null,
             schemas: $this->base(),
         );
+    }
+
+    /** Self-referencing canonical for a paginated listing (adds ?page=N when N>1). */
+    public function paginatedCanonical(int $page): string
+    {
+        return url()->current().($page > 1 ? '?page='.$page : '');
     }
 
     public function jsonLd(SeoData $seo): string

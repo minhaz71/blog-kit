@@ -144,6 +144,11 @@ class SitemapGenerator
                 'authors' => $this->authors($page),
             };
 
+            // Never list a URL that has an active 301/410 redirect — a crawler
+            // following the sitemap would only get bounced. One place covers
+            // every section.
+            $urls = $this->rejectRedirected($urls);
+
             // Backstop against any count/filter drift (noindex or custom
             // canonicals emptying a page that the index still lists): an
             // enabled section always returns a valid, 200 urlset — empty if
@@ -277,6 +282,38 @@ class SitemapGenerator
      * A page whose custom canonical points somewhere else must not appear in
      * the sitemap — the sitemap should only ever list canonical URLs.
      */
+    /**
+     * Drop any sitemap entry whose path matches an active (non-regex) redirect,
+     * so we never advertise a URL that just 301/410s. Regex redirects are left
+     * to the canonical/noindex filters — matching them per-URL here would be
+     * costly and they are rare for indexable pages.
+     */
+    protected function rejectRedirected($urls)
+    {
+        $sources = $this->activeRedirectSources();
+        if ($sources === []) {
+            return $urls;
+        }
+
+        return collect($urls)->reject(function ($entry) use ($sources) {
+            $path = (string) parse_url((string) ($entry['loc'] ?? ''), PHP_URL_PATH);
+            $path = rtrim('/'.ltrim($path, '/'), '/') ?: '/';
+
+            return in_array($path, $sources, true);
+        })->values();
+    }
+
+    /** Active exact redirect sources, normalized to a leading-slash, no-trailing-slash path. */
+    protected function activeRedirectSources(): array
+    {
+        return Cache::remember($this->cacheKey('redirect-sources'), 300, function () {
+            return \App\Models\Redirect::query()->active()->where('is_regex', false)
+                ->pluck('source')
+                ->map(fn ($s) => rtrim('/'.ltrim((string) $s, '/'), '/') ?: '/')
+                ->unique()->values()->all();
+        });
+    }
+
     protected function canonicalElsewhere($model): bool
     {
         $canonical = $model->seoMeta?->canonical_url;
