@@ -251,6 +251,14 @@ class NetworkController extends Controller
 
         $started = \App\Support\BackgroundProcess::artisan(['blogkit:update']);
 
+        // Record the outcome so the hub (and this site's own admin) can see it
+        // via GET /network/update-status even when the host can't spawn.
+        if (! $started) {
+            \App\Support\UpdateStatus::begin(\App\Support\Version::core());
+            \App\Support\UpdateStatus::finish(false,
+                'This host cannot spawn a background process (proc_open disabled). Run `php artisan blogkit:update` over SSH, or add a cron worker.');
+        }
+
         return response()->json([
             'ok' => $started,
             'started' => $started,
@@ -258,5 +266,19 @@ class NetworkController extends Controller
                 ? 'Update started (backup → pull → migrate) in the background.'
                 : 'Could not spawn the update process on this host; run `php artisan blogkit:update` over SSH.',
         ], $started ? 202 : 500);
+    }
+
+    /**
+     * Report this site's last/running self-update so a hub can show the outcome
+     * (owners never SSH in). Includes the rolling log tail. Signed like every
+     * network route.
+     */
+    public function updateStatus(): JsonResponse
+    {
+        return response()->json([
+            'ok' => true,
+            'version' => \App\Support\Version::core(),
+            'status' => \App\Support\UpdateStatus::get(),
+        ]);
     }
 }

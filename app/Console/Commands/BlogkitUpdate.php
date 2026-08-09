@@ -36,11 +36,16 @@ class BlogkitUpdate extends Command
         @set_time_limit(0);
         $dry = (bool) $this->option('dry-run');
 
+        if (! $dry) {
+            \App\Support\UpdateStatus::begin(Version::core().' @ '.(Version::gitCommit() ?? 'unknown'));
+        }
+
         $this->line('<info>Hemdox BlogKit updater</info> — current version '.Version::core().' @ '.(Version::gitCommit() ?? 'unknown'));
 
         // ── Step 1: pre-flight gate ────────────────────────────────────
         if (! Version::isGitRepo()) {
             $this->error('This is not a git checkout. Deploy the site via git first (see docs/DEPLOYMENT.md). Nothing changed.');
+            if (! $dry) \App\Support\UpdateStatus::finish(false, 'Not a git checkout — cannot self-update. Deploy via git first.');
 
             return self::FAILURE;
         }
@@ -48,6 +53,7 @@ class BlogkitUpdate extends Command
         $pre = Preflight::summary();
         if (! $pre['ok'] && ! $dry) {
             $this->error("Pre-flight found {$pre['critical']} critical issue(s). Run `php artisan blogkit:preflight` and fix them first. Nothing changed.");
+            if (! $dry) \App\Support\UpdateStatus::finish(false, "Pre-flight found {$pre['critical']} critical issue(s) — fix them, then retry.");
 
             return self::FAILURE;
         }
@@ -55,6 +61,7 @@ class BlogkitUpdate extends Command
         $behind = Version::commitsBehind(fetch: true);
         if ($behind === 0) {
             $this->info('Already up to date — the checkout matches the remote. Nothing to do.');
+            if (! $dry) \App\Support\UpdateStatus::finish(true, 'Already up to date.', Version::core().' @ '.(Version::gitCommit() ?? '?'));
 
             return self::SUCCESS;
         }
@@ -130,16 +137,20 @@ class BlogkitUpdate extends Command
             Artisan::call('queue:restart');
         } catch (\Throwable $e) {
             $this->error('Update FAILED: '.$e->getMessage());
+            \App\Support\UpdateStatus::appendLog('Update FAILED: '.$e->getMessage());
             $this->rollback();
             Artisan::call('up');
+            \App\Support\UpdateStatus::finish(false, 'Update failed and was rolled back: '.mb_substr($e->getMessage(), 0, 240));
 
             return self::FAILURE;
         }
 
         // ── Step 8: back online ────────────────────────────────────────
         Artisan::call('up');
+        Version::forget();
         $this->newLine();
         $this->info('✅ Updated to '.Version::core().' @ '.(Version::gitCommit() ?? '?').'. Site is back online.');
+        \App\Support\UpdateStatus::finish(true, 'Updated successfully. Site is back online.', Version::core().' @ '.(Version::gitCommit() ?? '?'));
 
         return self::SUCCESS;
     }
@@ -231,6 +242,8 @@ class BlogkitUpdate extends Command
     {
         $this->newLine();
         $this->line('▸ '.$message);
+        \App\Support\UpdateStatus::step($message);
+        \App\Support\UpdateStatus::appendLog('▸ '.$message);
     }
 
     /** @param array<int,string> $cmd */
@@ -238,7 +251,10 @@ class BlogkitUpdate extends Command
     {
         $process = new Process($cmd, base_path());
         $process->setTimeout($timeout);
-        $process->run(fn ($type, $buffer) => $this->output->write($buffer));
+        $process->run(function ($type, $buffer) {
+            $this->output->write($buffer);
+            \App\Support\UpdateStatus::appendLog($buffer);
+        });
 
         if (! $process->isSuccessful()) {
             throw new \RuntimeException('Command failed: '.implode(' ', $cmd).' — '.trim($process->getErrorOutput()));

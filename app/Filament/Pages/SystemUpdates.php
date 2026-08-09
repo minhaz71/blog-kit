@@ -91,16 +91,69 @@ class SystemUpdates extends Page
                         return;
                     }
 
+                    if (! BackgroundProcess::canSpawn()) {
+                        // Be honest: this host forbids background processes, so
+                        // record it and show the exact SSH command rather than a
+                        // false "started".
+                        \App\Support\UpdateStatus::begin(Version::core());
+                        \App\Support\UpdateStatus::finish(false,
+                            'This server blocks background processes (proc_open disabled). Run the update over SSH: php artisan blogkit:update');
+
+                        Notification::make()
+                            ->title('Cannot start the updater on this host')
+                            ->body('Run `php artisan blogkit:update` over SSH. See the status panel below for details.')
+                            ->color('warning')->persistent()->send();
+
+                        return;
+                    }
+
                     $launched = BackgroundProcess::artisan(['blogkit:update']);
 
                     Notification::make()
                         ->title($launched ? 'Update started in the background' : 'Could not start the updater')
                         ->body($launched
-                            ? 'It is backing up, then updating. Watch storage/logs/background.log, or run `php artisan blogkit:update` over SSH. The page will reflect the new version once it finishes.'
+                            ? 'Backing up, then updating. Progress and the log appear in the status panel below (it refreshes itself).'
                             : 'Run `php artisan blogkit:update` over SSH instead (this environment cannot spawn a background process).')
                         ->color($launched ? 'success' : 'warning')
                         ->send();
                 }),
+        ];
+    }
+
+    /**
+     * Host diagnostics for the common "update did nothing / no log" causes, so
+     * an owner sees WHY without SSH. Each entry: [ok, label, detail].
+     *
+     * @return array<int,array{ok:bool,label:string,detail:string}>
+     */
+    protected function diagnostics(): array
+    {
+        $base = base_path();
+        $canSpawn = BackgroundProcess::canSpawn();
+
+        return [
+            [
+                'ok' => Version::isGitRepo(),
+                'label' => 'Git checkout',
+                'detail' => Version::isGitRepo() ? 'Site is a git repo — self-update works.' : 'Not a git checkout — deploy via git to enable updates.',
+            ],
+            [
+                'ok' => $canSpawn,
+                'label' => 'Background process',
+                'detail' => $canSpawn
+                    ? 'This host can run the updater in the background.'
+                    : 'proc_open is disabled — the button cannot spawn the updater. Run `php artisan blogkit:update` over SSH (or via a cron worker).',
+            ],
+            [
+                'ok' => is_writable($base),
+                'label' => 'Writable code dir',
+                'detail' => is_writable($base) ? 'The code directory is writable (git pull can apply).' : "Not writable by the web user: {$base}",
+            ],
+            [
+                'ok' => is_writable(storage_path('logs')),
+                'label' => 'Writable logs',
+                'detail' => is_writable(storage_path('logs')) ? 'Logs are writable — update output is captured.' : 'storage/logs is not writable — update output cannot be saved.',
+            ],
         ];
     }
 
@@ -118,6 +171,9 @@ class SystemUpdates extends Page
             'labels' => Version::COMPONENT_LABELS,
             'preflight' => Preflight::summary(),
             'changelog' => $this->changelog(),
+            'update' => \App\Support\UpdateStatus::get(),
+            'canSpawn' => BackgroundProcess::canSpawn(),
+            'diagnostics' => $this->diagnostics(),
         ];
     }
 

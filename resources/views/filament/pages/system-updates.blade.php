@@ -40,6 +40,43 @@
         </div>
     @endif
 
+    {{-- Last / running update — self-refreshes while an update is in progress --}}
+    @php($u = $update ?? ['state' => 'idle'])
+    <div @if(($u['state'] ?? '') === 'running') wire:poll.4s @endif>
+        @if(($u['state'] ?? 'idle') !== 'idle')
+            <div class="sup-card" style="margin-bottom:1rem;border-left:4px solid {{ $u['state']==='success' ? '#16a34a' : ($u['state']==='failed' ? '#dc2626' : '#d97706') }}">
+                <h3>Last update
+                    @php($st = $u['state'] ?? 'idle')
+                    <span class="sup-badge {{ $st==='success' ? 'sup-badge--ok' : 'sup-badge--new' }}">{{ strtoupper($st) }}</span>
+                    @if($st === 'running')<span style="font-size:.72rem;color:#6b7280">· refreshing…</span>@endif
+                </h3>
+                <div class="sup-meta">
+                    @if(!empty($u['step']))<strong>Step:</strong> {{ $u['step'] }}<br>@endif
+                    @if(!empty($u['message'])){{ $u['message'] }}<br>@endif
+                    @if(!empty($u['from'])){{ $u['from'] }}@if(!empty($u['to'])) → <strong>{{ $u['to'] }}</strong>@endif<br>@endif
+                    @if(!empty($u['finished_at']))Finished {{ \Illuminate\Support\Carbon::parse($u['finished_at'])->diffForHumans() }}@elseif(!empty($u['started_at']))Started {{ \Illuminate\Support\Carbon::parse($u['started_at'])->diffForHumans() }}@endif
+                </div>
+                @if(!empty($u['log']))
+                    <pre style="margin-top:.8rem;max-height:16rem;overflow:auto;background:#0b1020;color:#cbd5e1;padding:.8rem 1rem;border-radius:.6rem;font-size:.74rem;line-height:1.5;white-space:pre-wrap">{{ $u['log'] }}</pre>
+                @endif
+            </div>
+        @endif
+
+        {{-- Host diagnostics: the common "update did nothing" causes --}}
+        <div class="sup-card" style="margin-bottom:1rem">
+            <h3>Update readiness (host)</h3>
+            @foreach(($diagnostics ?? []) as $d)
+                <div class="sup-check">
+                    <span class="sup-check__ic sup-check__ic--{{ $d['ok'] ? 'ok' : 'crit' }}">{{ $d['ok'] ? '✓' : '✕' }}</span>
+                    <span>{{ $d['label'] }}<small>{{ $d['detail'] }}</small></span>
+                </div>
+            @endforeach
+            @unless($canSpawn ?? true)
+                <div class="sup-meta" style="margin-top:.6rem">Run manually over SSH: <code>php artisan blogkit:update</code></div>
+            @endunless
+        </div>
+    </div>
+
     <div class="sup-grid">
         {{-- Current version --}}
         <div class="sup-card">

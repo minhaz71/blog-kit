@@ -26,5 +26,7 @@ Route::prefix('v1')->group(function () {
             ->where('id', '[0-9]+');
         // One-click update: trigger this site's own blogkit:update in the background.
         Route::post('/update', [\App\Http\Controllers\Api\NetworkController::class, 'update']);
+        // Report this site's last/running update outcome (for the hub to show).
+        Route::get('/update-status', [\App\Http\Controllers\Api\NetworkController::class, 'updateStatus']);
     });
 });

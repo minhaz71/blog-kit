@@ -15,10 +15,35 @@ use Symfony\Component\Process\Process;
  */
 class BackgroundProcess
 {
+    /**
+     * Can this host actually spawn a detached process? Managed PHP (many
+     * CyberPanel/OpenLiteSpeed, cPanel, shared hosts) disable proc_open/exec via
+     * `disable_functions`, in which case a "launch" silently does nothing. Detect
+     * that up front so callers can fall back (queue/sync) or show the SSH command
+     * instead of a false "started".
+     */
+    public static function canSpawn(): bool
+    {
+        if (\function_exists('app') && app()->runningUnitTests()) {
+            return false;
+        }
+
+        $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+
+        // Symfony Process needs proc_open; nohup backgrounding needs a shell.
+        foreach (['proc_open'] as $fn) {
+            if (! \function_exists($fn) || in_array($fn, $disabled, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public static function artisan(array $args): bool
     {
-        // Not meaningful under the test runner.
-        if (app()->runningUnitTests()) {
+        // Not meaningful under the test runner, or where the host forbids it.
+        if (! self::canSpawn()) {
             return false;
         }
 
