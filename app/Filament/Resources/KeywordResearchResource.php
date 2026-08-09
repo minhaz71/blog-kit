@@ -102,6 +102,18 @@ class KeywordResearchResource extends Resource
                 TextColumn::make('provider')->badge()->color('gray')->toggleable(),
                 TextColumn::make('created_at')->since()->sortable(),
             ])
+            ->filters([
+                // Read research runs site-wise, like Blog Ideas — nullable
+                // site_id means "this site".
+                \Filament\Tables\Filters\SelectFilter::make('site_id')
+                    ->label('Target site')
+                    ->options(fn () => ['local' => 'This site'] + \App\Models\ConnectedSite::query()
+                        ->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+                    ->query(fn ($query, array $data) => filled($data['value'] ?? null)
+                        ? ($data['value'] === 'local' ? $query->whereNull('site_id') : $query->where('site_id', $data['value']))
+                        : $query)
+                    ->visible(fn () => network_enabled() && is_network_hub()),
+            ])
             ->defaultSort('id', 'desc')
             ->recordUrl(fn (KeywordResearchRun $r) => KeywordResearchResource::getUrl('edit', ['record' => $r]));
     }

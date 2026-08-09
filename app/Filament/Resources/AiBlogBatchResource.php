@@ -302,6 +302,34 @@ class AiBlogBatchResource extends Resource
                     ->color('success'),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->filters([
+                // Filter batches by the site they were written for — mirrors the
+                // Blog Ideas "Target site" filter so a 10-site network stays
+                // readable. network_site_ids is a JSON array of spoke IDs (and/or
+                // the 'local' sentinel); match with whereJsonContains.
+                \Filament\Tables\Filters\SelectFilter::make('network_site_ids')
+                    ->label('Target site')
+                    ->options(fn () => ['local' => 'This site'] + \App\Models\ConnectedSite::query()
+                        ->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+                    ->query(function ($query, array $data) {
+                        $value = $data['value'] ?? null;
+                        if (! filled($value)) {
+                            return $query;
+                        }
+
+                        // "This site" = no spokes: null, empty array, or only the
+                        // 'local' sentinel.
+                        if ($value === 'local') {
+                            return $query->where(fn ($q) => $q
+                                ->whereNull('network_site_ids')
+                                ->orWhere('network_site_ids', '[]')
+                                ->orWhere('network_site_ids', '["local"]'));
+                        }
+
+                        return $query->whereJsonContains('network_site_ids', (int) $value);
+                    })
+                    ->visible(fn () => network_enabled() && is_network_hub()),
+            ])
             ->recordActions([
                 \Filament\Actions\Action::make('monitor')
                     ->label('Live monitor')
