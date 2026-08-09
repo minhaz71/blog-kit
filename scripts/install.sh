@@ -259,6 +259,14 @@ fi
 echo "▸ Fixing ownership & permissions…"
 chown -R "$OWNER:$GROUP" "$APP"
 chmod -R 775 "$APP/storage" "$APP/bootstrap/cache"
+# The vHost docRoot is public_html/public, but CyberPanel makes public_html 750
+# (no access for "other"). The LiteSpeed server process isn't the site user, so
+# it can't TRAVERSE into public_html to reach public/ → 403 on every request.
+# o+x adds traverse-only (not list) on the parent so it can pass through to the
+# docroot. Needed whenever the docroot is a subdirectory (i.e. unless SKIP_VHOST).
+if [ "${SKIP_VHOST:-0}" != "1" ]; then
+  chmod o+x "$APP"
+fi
 
 # ── 9. Background processes — scheduler cron + queue worker (AS THE SITE USER)─
 echo "▸ Installing cron jobs (scheduler + queue worker) as $OWNER…"
