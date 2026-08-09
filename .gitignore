@@ -39,3 +39,4 @@ Thumbs.db
 /resources/views/filament/pages/guest-post-writer.blade.php
 /storage/app/guest-posts/
 /tests/Feature/GuestPostGeneratorTest.php
+storage/app/composer-home/
