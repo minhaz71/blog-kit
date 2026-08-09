@@ -23,6 +23,17 @@
 #
 # Everything runs as the CyberPanel SITE USER (never leaves root-owned files).
 # All variables can be overridden from the environment.
+#
+# DOMAIN ISOLATION — this script only ever touches the CURRENT domain:
+#   • Files:   only $APP (/home/$DOMAIN/public_html) is chown/chmod'd.
+#   • Database: CREATE ... IF NOT EXISTS only; GRANT limited to this one DB;
+#               never DROPs anything; never resets an existing user's password.
+#   • Cron:    only this app's own lines (cd $APP && …) are replaced; other
+#               domains' cron jobs are left untouched.
+#   • vHost:   only this domain's vhost.conf is edited (and backed up first).
+#   • Cache:   only this app's caches are cleared — the shared LiteSpeed edge
+#               cache is NEVER wiped. (LiteSpeed reload is graceful, no data loss.)
+# No other site's files, database, cron, or cached data are affected.
 
 set -euo pipefail
 
@@ -126,18 +137,28 @@ elif mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" -e 'SELEC
   echo "▸ Database '$DB_DATABASE' already reachable as '$DB_USERNAME' — skipping create."
 elif mysql_admin -e 'SELECT 1' >/dev/null 2>&1; then
   echo "▸ Creating database '$DB_DATABASE' and user '$DB_USERNAME'…"
-  # IF NOT EXISTS keeps it re-runnable; ALTER USER re-syncs the password so .env
-  # and MySQL never drift. Passwords are hex (no quoting hazards).
+  # Strictly scoped to THIS domain's database and user:
+  #  - CREATE ... IF NOT EXISTS never overwrites an existing database or user.
+  #  - GRANT is limited to `$DB_DATABASE`.* — never a server-wide grant, so this
+  #    user can only ever touch its own database.
+  # No DROP anywhere; existing data on this or any other DB is never destroyed.
   mysql_admin <<SQL || echo "  ⚠ DB creation reported an error — check MySQL and re-run."
 CREATE DATABASE IF NOT EXISTS \`$DB_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '$DB_USERNAME'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
 CREATE USER IF NOT EXISTS '$DB_USERNAME'@'127.0.0.1' IDENTIFIED BY '$DB_PASSWORD';
-ALTER USER '$DB_USERNAME'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
-ALTER USER '$DB_USERNAME'@'127.0.0.1' IDENTIFIED BY '$DB_PASSWORD';
 GRANT ALL PRIVILEGES ON \`$DB_DATABASE\`.* TO '$DB_USERNAME'@'localhost';
 GRANT ALL PRIVILEGES ON \`$DB_DATABASE\`.* TO '$DB_USERNAME'@'127.0.0.1';
 FLUSH PRIVILEGES;
 SQL
+  # Only (re)set the password when WE generated it this run — never reset the
+  # password of a user that may already exist and be shared by another app.
+  if [ "$AUTO_DB_PW" = "1" ]; then
+    mysql_admin <<SQL 2>/dev/null || true
+ALTER USER '$DB_USERNAME'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
+ALTER USER '$DB_USERNAME'@'127.0.0.1' IDENTIFIED BY '$DB_PASSWORD';
+FLUSH PRIVILEGES;
+SQL
+  fi
 else
   echo "▸ ⚠ Could not reach MySQL as admin to auto-create the database."
   echo "    Re-run with MYSQL_ROOT_PASSWORD='...' (or create '$DB_DATABASE' in CyberPanel first)."
@@ -222,8 +243,10 @@ chmod -R 775 "$APP/storage" "$APP/bootstrap/cache"
 echo "▸ Installing cron jobs (scheduler + queue worker) as $OWNER…"
 SCHED_LINE="* * * * * cd $APP && sudo -u $OWNER $PHP artisan schedule:run >> /dev/null 2>&1"
 QUEUE_LINE="* * * * * cd $APP && sudo -u $OWNER $PHP artisan queue:work --stop-when-empty --max-time=55 >> /dev/null 2>&1"
-# Idempotent: strip any existing BlogKit cron lines for this app, then add fresh.
-( crontab -l 2>/dev/null | grep -vF "$APP/artisan schedule:run" | grep -vF "$APP/artisan queue:work" | grep -vF "artisan schedule:run" | grep -vF "artisan queue:work"; \
+# Idempotent AND domain-scoped: strip only THIS app's cron lines (they all begin
+# with "cd $APP &&"), then add fresh. Never touch other domains' cron entries —
+# a generic "artisan schedule:run" filter would wrongly delete every site's jobs.
+( crontab -l 2>/dev/null | grep -vF "cd $APP &&"; \
   echo "$SCHED_LINE"; echo "$QUEUE_LINE" ) | crontab -
 
 # ── 9b. Web server docRoot — point the vHost at Laravel's public/ (auto) ─────
@@ -249,12 +272,21 @@ if [ "${SKIP_VHOST:-0}" != "1" ]; then
   fi
 fi
 
-# ── 10. Flush caches (app + LiteSpeed edge) ──────────────────────────────────
-echo "▸ Clearing caches…"
+# ── 10. Flush caches (THIS app only) + reload LiteSpeed ──────────────────────
+# Only clear this app's own caches. We deliberately DO NOT wipe
+# /usr/local/lsws/cachedata (that is the shared edge cache for EVERY site on the
+# server) — this install must never affect another domain's data or cache.
+echo "▸ Clearing this app's caches…"
 artisan optimize:clear
 artisan cache:clear || true
-rm -rf /usr/local/lsws/cachedata/* 2>/dev/null || true
-systemctl restart lsws 2>/dev/null || true
+# Graceful reload so the new code/routes/vHost take effect. This is a server-wide
+# LiteSpeed reload (there is no per-vHost reload), but it is graceful — no other
+# site loses data or connections; it only re-reads config.
+if [ -x /usr/local/lsws/bin/lswsctrl ]; then
+  /usr/local/lsws/bin/lswsctrl restart 2>/dev/null || systemctl restart lsws 2>/dev/null || true
+else
+  systemctl restart lsws 2>/dev/null || true
+fi
 
 # ── 11. Final health check ───────────────────────────────────────────────────
 echo "▸ Preflight:"
