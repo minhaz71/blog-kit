@@ -39,6 +39,10 @@ return Application::configure(basePath: dirname(__DIR__))
             // page cache (before it here) so the header is applied on cache
             // HITs too — the cache stores only HTML, not this header.
             \App\Http\Middleware\AgentDiscoveryLink::class,
+            // Browser security headers (CSP, HSTS, X-Frame-Options, …). BEFORE
+            // the guest page cache so they apply on cache HITs too — the cache
+            // stores only HTML, not these headers.
+            \App\Http\Middleware\SecurityHeaders::class,
             // Outermost of the three: a page-cache HIT returns stored
             // (already-minified) HTML without re-running Minify/controllers.
             // Auto-disabled on LiteSpeed servers, where the LS headers
