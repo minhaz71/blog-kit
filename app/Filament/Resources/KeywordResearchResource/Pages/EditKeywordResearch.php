@@ -42,9 +42,19 @@ class EditKeywordResearch extends EditRecord
                 ->visible(fn () => in_array($this->record->status, ['clustered', 'planned'], true))
                 ->form([
                     TextInput::make('limit')->label('Max ideas to add')->numeric()->default(60)->minValue(1)->maxValue(300),
+                    \Filament\Forms\Components\Toggle::make('ai_brief')
+                        ->label('Let AI write full briefs (title, pain point, angle, outline)')
+                        ->default(fn () => \App\Services\Research\IdeaBriefWriter::provider() !== null)
+                        ->disabled(fn () => \App\Services\Research\IdeaBriefWriter::provider() === null)
+                        ->helperText(fn () => \App\Services\Research\IdeaBriefWriter::provider() !== null
+                            ? 'One AI call per cluster fills a sharp title + pain point, angle and outline for every idea. Turn OFF to add plain keyword-based titles with empty briefs you fill yourself (zero AI cost — edit them in the Blog Ideas table or via CSV).'
+                            : 'No AI provider key set — add one in Settings → AI settings to enable. Ideas will be added with plain titles and empty briefs.'),
                 ])
                 ->action(function (array $data): void {
-                    $result = app(PlanBuilder::class)->build($this->record->fresh(), ['limit' => (int) $data['limit']]);
+                    $result = app(PlanBuilder::class)->build($this->record->fresh(), [
+                        'limit' => (int) $data['limit'],
+                        'ai_brief' => (bool) ($data['ai_brief'] ?? false),
+                    ]);
 
                     Notification::make()->title($result['message'])->success()->send();
                 }),

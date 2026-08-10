@@ -53,11 +53,23 @@ class PlanBuilder
                 BlogTopicIdea::where('site_id', $run->site_id)->pluck('title')->filter()->values()->all(),
             )
             : BlogTopicIdea::conflictCorpus(includePosts: true);
+        // Opt-in: one AI call per cluster fills a full brief (sharp title +
+        // pain_point, audience_need, angle, outline). Off → mechanical title,
+        // empty brief (zero AI cost). Failures per cluster fall back silently.
+        $briefs = [];
+        if (($opts['ai_brief'] ?? false) && (new IdeaBriefWriter)->available()) {
+            $writer = new IdeaBriefWriter;
+            foreach ($selected->groupBy('cluster') as $clusterName => $clusterTerms) {
+                $briefs += $writer->writeCluster((string) $clusterName, $clusterTerms, ['country' => $run->target_country]);
+            }
+        }
+
         $created = 0;
         $skipped = 0;
 
         foreach ($selected as $term) {
-            $title = $this->toTitle($term);
+            $brief = $briefs[$term->id] ?? null;
+            $title = ($brief && $brief['title'] !== '') ? $brief['title'] : $this->toTitle($term);
             $fingerprint = BlogTopicIdea::fingerprint($title);
 
             if (BlogTopicIdea::where('fingerprint', $fingerprint)->exists()
@@ -87,9 +99,10 @@ class PlanBuilder
                 'primary_keyword' => $term->keyword,
                 'secondary_keywords' => $secondary,
                 'search_query' => $term->keyword,
-                'audience_need' => null,
-                'angle' => null,
-                'outline' => [],
+                'pain_point' => $brief['pain_point'] ?? null,
+                'audience_need' => $brief['audience_need'] ?? null,
+                'angle' => $brief['angle'] ?? null,
+                'outline' => $brief['outline'] ?? [],
                 'link_targets' => [],
                 'verified_rounds' => 0,
                 'status' => 'waiting',

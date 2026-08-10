@@ -363,6 +363,7 @@ JSON;
 
         return "Article assignment:\n".static::compactRow($item->row)
             .static::currentCopyBlock($item->row)
+            .static::selfBriefBlock($item->row)
             .static::affiliateBlock($item->row)
             .($digest !== '' ? "\n\n".$digest : '')
             .($learned !== '' ? "\n\n".$learned : '')
@@ -372,6 +373,33 @@ JSON;
             ."\n\nTARGET LENGTH: ".static::lengthDirective($item->row)
             ."\n\nSTRUCTURE VARIATION for this article: {$directive}"
             ."\n\nReturn the JSON now.";
+    }
+
+    /**
+     * Guardrail for bare titles: when an item arrives with NO brief (no
+     * pain_point, angle or outline — e.g. a keyword-research idea planned with
+     * AI briefs turned off, or a title-only CSV row), instruct the writer to
+     * derive the brief itself before drafting, so an empty brief never yields
+     * a shallow, generic "complete guide". Prompt-only — no extra LLM call.
+     */
+    public static function selfBriefBlock(array $row): string
+    {
+        $outline = $row['outline'] ?? '';
+        $outlineText = is_array($outline) ? implode('', $outline) : (string) $outline;
+
+        $hasBrief = trim((string) ($row['pain_point'] ?? '')) !== ''
+            || trim((string) ($row['angle'] ?? '')) !== ''
+            || trim($outlineText) !== '';
+
+        if ($hasBrief) {
+            return '';
+        }
+
+        return "\n\nNO BRIEF WAS PROVIDED — do NOT write a generic overview. BEFORE drafting, silently establish:\n"
+            ."1) the reader's specific pain point and the exact search intent behind this title;\n"
+            ."2) a distinct angle that beats the generic articles already ranking for this query;\n"
+            ."3) a focused section outline (table of contents) that fully answers that intent.\n"
+            .'Then write to THAT self-made brief — for a specific reader with a specific problem.';
     }
 
     /**
