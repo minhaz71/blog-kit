@@ -119,6 +119,45 @@ class BlogTopicIdeaResource extends Resource
                         : $query)
                     ->visible(fn () => network_enabled() && is_network_hub()),
             ])
+            ->headerActions([
+                \Filament\Actions\Action::make('exportCsv')
+                    ->label('Export CSV')
+                    ->icon(Heroicon::OutlinedArrowDownTray)
+                    ->color('gray')
+                    ->tooltip('Download every idea (except dismissed) as a CSV to edit the briefs in Excel, then re-import.')
+                    ->action(function () {
+                        $ideas = BlogTopicIdea::query()->where('status', '!=', 'dismissed')->orderByDesc('id')->get();
+                        $csv = \App\Services\Ai\BlogIdeaCsv::export($ideas);
+
+                        return response()->streamDownload(fn () => print($csv), 'blog-ideas-'.now()->format('Y-m-d-His').'.csv', [
+                            'Content-Type' => 'text/csv',
+                        ]);
+                    }),
+                \Filament\Actions\Action::make('importCsv')
+                    ->label('Import CSV')
+                    ->icon(Heroicon::OutlinedArrowUpTray)
+                    ->color('gray')
+                    ->modalDescription('Upload a CSV exported from here (or built to the same columns). Rows with an "id" UPDATE that idea; a blank "id" CREATES a new one. Outline and secondary_keywords are pipe-separated ("A | B | C").')
+                    ->schema([
+                        \Filament\Forms\Components\FileUpload::make('file')
+                            ->label('CSV file')
+                            ->disk('local')
+                            ->directory('idea-imports')
+                            ->acceptedFileTypes(['text/csv', 'text/plain', 'application/vnd.ms-excel'])
+                            ->required(),
+                    ])
+                    ->action(function (array $data): void {
+                        $path = \Illuminate\Support\Facades\Storage::disk('local')->path($data['file']);
+                        $res = \App\Services\Ai\BlogIdeaCsv::import($path);
+                        \Illuminate\Support\Facades\Storage::disk('local')->delete($data['file']);
+
+                        Notification::make()
+                            ->title('Import complete')
+                            ->body("{$res['updated']} updated · {$res['created']} created · {$res['skipped']} skipped.")
+                            ->success()
+                            ->send();
+                    }),
+            ])
             ->recordActions([
                 \Filament\Actions\Action::make('send')
                     ->label('Send to writer')
@@ -158,6 +197,18 @@ class BlogTopicIdeaResource extends Resource
                         Notification::make()->title('Sent to the AI writer')
                             ->body("{$waiting->count()} article(s) queued in batch \"{$batch->name}\". Watch them in AI Blog Writer → Live Monitor.")
                             ->success()->send();
+                    })
+                    ->deselectRecordsAfterCompletion(),
+                \Filament\Actions\BulkAction::make('exportSelected')
+                    ->label('Export selected to CSV')
+                    ->icon(Heroicon::OutlinedArrowDownTray)
+                    ->color('gray')
+                    ->action(function (Collection $records) {
+                        $csv = \App\Services\Ai\BlogIdeaCsv::export($records);
+
+                        return response()->streamDownload(fn () => print($csv), 'blog-ideas-selected-'.now()->format('Y-m-d-His').'.csv', [
+                            'Content-Type' => 'text/csv',
+                        ]);
                     })
                     ->deselectRecordsAfterCompletion(),
                 \Filament\Actions\BulkAction::make('dismissSelected')
